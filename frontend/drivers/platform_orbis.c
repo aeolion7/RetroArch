@@ -293,7 +293,7 @@ static bool frontend_orbis_set_fork(enum frontend_fork fork_mode)
 }
 #endif
 
-static void frontend_orbis_exitspawn(char *s, size_t len)
+static void frontend_orbis_exitspawn(char *s, size_t len, char *args)
 {
    bool should_load_game = false;
 #ifndef IS_SALAMANDER
@@ -329,7 +329,7 @@ static int frontend_orbis_parse_drive_list(void *data, bool load_content)
    file_list_t *list = (file_list_t*)data;
    enum msg_hash_enums enum_idx = load_content ?
       MENU_ENUM_LABEL_FILE_DETECT_CORE_LIST_PUSH_DIR :
-      MSG_UNKNOWN;
+      MENU_ENUM_LABEL_FILE_BROWSER_DIRECTORY;
 
    menu_entries_append_enum(list,
          "host0:app",
@@ -374,5 +374,7 @@ frontend_ctx_driver_t frontend_ctx_orbis = {
    NULL,                         /* set_sustained_performance_mode */
    NULL,                         /* get_cpu_model_name */
    NULL,                         /* get_user_language */
+   NULL,                         /* is_narrator_running */
+   NULL,                         /* accessibility_speak */
    "orbis",
 };

@@ -17,13 +17,17 @@
 #include <string/stdstring.h>
 #include <retro_timers.h>
 
+#include <net/net_http.h>
+#include <streams/file_stream.h>
+#include <file/file_path.h>
+#include <features/features_cpu.h>
+
 #include "discord.h"
 #include "discord_register.h"
 
 #include "../deps/discord-rpc/include/discord_rpc.h"
 
 #include "../retroarch.h"
-#include "../configuration.h"
 #include "../core.h"
 #include "../core_info.h"
 #include "../paths.h"
@@ -44,18 +48,13 @@
 #endif
 
 #ifdef HAVE_MENU
-#include "../../menu/widgets/menu_input_dialog.h"
 #include "../../menu/menu_cbs.h"
 #endif
 
-#include <net/net_http.h>
 #include "../network/net_http_special.h"
 #include "../tasks/tasks_internal.h"
-#include <streams/file_stream.h>
-#include <file/file_path.h>
 #include "../file_path_special.h"
 
-#include <features/features_cpu.h>
 
 static int64_t start_time         = 0;
 static int64_t pause_time         = 0;
@@ -64,8 +63,6 @@ static int64_t ellapsed_time      = 0;
 static bool discord_ready         = false;
 static bool discord_avatar_ready  = false;
 static unsigned discord_status    = 0;
-
-struct netplay_room *room;
 
 /* The discord API specifies these variables:
 - userId --------- char[24]   - the userId of the player asking to join
@@ -76,7 +73,6 @@ struct netplay_room *room;
 - partyId        - char[128] - the party you would be joining
 */
 
-static char user_id[24];
 static char user_name[344];
 static char self_party_id[128];
 static char peer_party_id[128];
@@ -153,7 +149,7 @@ static bool discord_download_avatar(
    strlcpy(transf->path, buf, sizeof(transf->path));
 
    RARCH_LOG("[discord] downloading avatar from: %s\n", url_encoded);
-   task_push_http_transfer(url_encoded, true, NULL, cb_generic_download, transf);
+   task_push_http_transfer_file(url_encoded, true, NULL, cb_generic_download, transf);
 
    return false;
 }
@@ -206,14 +202,16 @@ static void handle_discord_join_cb(retro_task_t *task,
       netplay_driver_ctl(RARCH_NETPLAY_CTL_ENABLE_CLIENT, NULL);
 
       snprintf(join_hostname, sizeof(join_hostname), "%s|%d",
-         room->host_method == NETPLAY_HOST_METHOD_MITM ? room->mitm_address : room->address,
-         room->host_method == NETPLAY_HOST_METHOD_MITM ? room->mitm_port : room->port);
+         room->host_method == NETPLAY_HOST_METHOD_MITM 
+         ? room->mitm_address : room->address,
+         room->host_method == NETPLAY_HOST_METHOD_MITM 
+         ? room->mitm_port : room->port);
 
       RARCH_LOG("[discord] joining lobby at: %s\n", join_hostname);
       task_push_netplay_crc_scan(room->gamecrc,
          room->gamename, join_hostname, room->corename, room->subsystem_name);
       connecting = true;
-      discord_update(DISCORD_PRESENCE_NETPLAY_CLIENT);
+      discord_update(DISCORD_PRESENCE_NETPLAY_CLIENT, false);
    }
 
 finish:
@@ -253,6 +251,7 @@ static void handle_discord_spectate(const char* secret)
    RARCH_LOG("[discord] spectate (%s)\n", secret);
 }
 
+#ifdef HAVE_MENU
 static void handle_discord_join_response(void *ignore, const char *line)
 {
    /* To-Do: needs in-game widgets
@@ -261,10 +260,11 @@ static void handle_discord_join_response(void *ignore, const char *line)
 
 #ifdef HAVE_MENU
    menu_input_dialog_end();
-   rarch_menu_running_finished(false);
+   retroarch_menu_running_finished(false);
 #endif
 */
 }
+#endif
 
 static void handle_discord_join_request(const DiscordUser* request)
 {
@@ -285,7 +285,7 @@ static void handle_discord_join_request(const DiscordUser* request)
 #ifdef HAVE_MENU
    discord_download_avatar(request->userId, request->avatar);
    /* To-Do: needs in-game widgets
-      rarch_menu_running();
+      retroarch_menu_running();
       */
 
    memset(&line, 0, sizeof(line));
@@ -303,7 +303,9 @@ static void handle_discord_join_request(const DiscordUser* request)
 #endif
 }
 
-void discord_update(enum discord_presence presence)
+/* TODO/FIXME - replace last parameter with struct type to allow for more
+ * arguments to be passed later */
+void discord_update(enum discord_presence presence, bool fuzzy_archive_match)
 {
    core_info_t *core_info = NULL;
 
@@ -351,7 +353,8 @@ void discord_update(enum discord_presence presence)
             if (current_playlist)
             {
                playlist_get_index_by_path(
-                  current_playlist, path_get(RARCH_PATH_CONTENT), &entry);
+                     current_playlist, path_get(RARCH_PATH_CONTENT), &entry,
+                     fuzzy_archive_match);
 
                if (entry && !string_is_empty(entry->label))
                   label = entry->label;
@@ -397,25 +400,34 @@ void discord_update(enum discord_presence presence)
          }
          break;
       case DISCORD_PRESENCE_NETPLAY_HOSTING:
-         room = netplay_get_host_room();
-         if (room->id == 0)
-            return;
-
-         RARCH_LOG("[discord] netplay room details: id=%d, nick=%s IP=%s port=%d\n",
-            room->id, room->nickname,
-            room->host_method == NETPLAY_HOST_METHOD_MITM ? room->mitm_address : room->address,
-            room->host_method == NETPLAY_HOST_METHOD_MITM ? room->mitm_port : room->port);
-
          {
             char join_secret[128];
+            struct netplay_room *room = netplay_get_host_room();
+            if (room->id == 0)
+               return;
 
-            snprintf(self_party_id, sizeof(self_party_id), "%d", room->id);
-            snprintf(join_secret, sizeof(join_secret), "%d|%" PRId64, room->id, cpu_features_get_time_usec());
-            discord_presence.joinSecret = strdup(join_secret);
-            /* discord_presence.spectateSecret = "SPECSPECSPEC"; */
-            discord_presence.partyId    = strdup(self_party_id);
-            discord_presence.partyMax   = 2;
-            discord_presence.partySize  = 1;
+            RARCH_LOG("[discord] netplay room details: id=%d"
+                  ", nick=%s IP=%s port=%d\n",
+                  room->id, room->nickname,
+                  room->host_method == NETPLAY_HOST_METHOD_MITM 
+                  ? room->mitm_address : room->address,
+                  room->host_method == NETPLAY_HOST_METHOD_MITM 
+                  ? room->mitm_port : room->port);
+
+
+            snprintf(self_party_id,
+                  sizeof(self_party_id), "%d", room->id);
+            snprintf(join_secret,
+                  sizeof(join_secret), "%d|%" PRId64,
+                  room->id, cpu_features_get_time_usec());
+
+            discord_presence.joinSecret     = strdup(join_secret);
+#if 0
+            discord_presence.spectateSecret = "SPECSPECSPEC";
+#endif
+            discord_presence.partyId        = strdup(self_party_id);
+            discord_presence.partyMax       = 2;
+            discord_presence.partySize      = 1;
 
             RARCH_LOG("[discord] join secret: %s\n", join_secret);
             RARCH_LOG("[discord] party id: %s\n", self_party_id);
@@ -439,6 +451,12 @@ void discord_update(enum discord_presence presence)
             }
          }
          break;
+#ifdef HAVE_CHEEVOS
+      case DISCORD_PRESENCE_RETROACHIEVEMENTS:
+         discord_presence.details = rcheevos_get_richpresence();
+         presence = DISCORD_PRESENCE_GAME;
+         break;
+#endif
       case DISCORD_PRESENCE_SHUTDOWN:
             discord_presence.partyId    = NULL;
             discord_presence.partyMax   = 0;
@@ -455,11 +473,10 @@ void discord_update(enum discord_presence presence)
    discord_status = presence;
 }
 
-void discord_init(void)
+void discord_init(const char *discord_app_id, char *args)
 {
    char full_path[PATH_MAX_LENGTH];
    char command[PATH_MAX_LENGTH];
-   settings_t *settings = config_get_ptr();
 
    DiscordEventHandlers handlers;
 
@@ -474,22 +491,22 @@ void discord_init(void)
    handlers.spectateGame = handle_discord_spectate;
    handlers.joinRequest  = handle_discord_join_request;
 
-   Discord_Initialize(settings->arrays.discord_app_id, &handlers, 0, NULL);
+   Discord_Initialize(discord_app_id, &handlers, 0, NULL);
 
 #ifdef _WIN32
-   GetModuleFileNameA(NULL, full_path, sizeof(full_path));
-   if (strstr(get_retroarch_launch_arguments(), full_path))
-      strlcpy(command, get_retroarch_launch_arguments(), sizeof(command));
+   fill_pathname_application_path(full_path, sizeof(full_path));
+   if (strstr(args, full_path))
+      strlcpy(command, args, sizeof(command));
    else
    {
       path_basedir(full_path);
-      snprintf(command, sizeof(command), "%s%s", full_path, get_retroarch_launch_arguments());
+      snprintf(command, sizeof(command), "%s%s", full_path, args);
    }
 #else
-   snprintf(command, sizeof(command), "sh -c %s", get_retroarch_launch_arguments());
+   snprintf(command, sizeof(command), "sh -c %s", args);
 #endif
    RARCH_LOG("[discord] registering startup command: %s\n", command);
-   Discord_Register(settings->arrays.discord_app_id, command);
+   Discord_Register(discord_app_id, command);
    discord_ready = true;
 }
 
@@ -499,9 +516,4 @@ void discord_shutdown(void)
    Discord_ClearPresence();
    Discord_Shutdown();
    discord_ready = false;
-}
-
-void discord_run_callbacks(void)
-{
-   Discord_RunCallbacks();
 }

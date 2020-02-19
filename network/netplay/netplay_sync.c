@@ -551,7 +551,10 @@ static void netplay_handle_frame_hash(netplay_t *netplay,
  *
  * Pre-frame for Netplay synchronization.
  */
-bool netplay_sync_pre_frame(netplay_t *netplay)
+bool netplay_sync_pre_frame(netplay_t *netplay,
+      const char *netplay_password,
+      const char *netplay_spectate_password
+      )
 {
    retro_ctx_serialize_info_t serial_info;
 
@@ -726,7 +729,8 @@ bool netplay_sync_pre_frame(netplay_t *netplay)
             goto process;
          }
 
-         netplay_handshake_init_send(netplay, connection);
+         netplay_handshake_init_send(netplay, connection,
+               netplay_password, netplay_spectate_password);
 
       }
    }
@@ -848,9 +852,13 @@ void netplay_sync_post_frame(netplay_t *netplay, bool stalled)
       {
          netplay->replay_ptr = PREV_PTR(netplay->replay_ptr);
          netplay->replay_frame_count--;
+#ifdef HAVE_THREADS
          autosave_lock();
+#endif
          core_run();
+#ifdef HAVE_THREADS
          autosave_unlock();
+#endif
          netplay->replay_ptr = NEXT_PTR(netplay->replay_ptr);
          netplay->replay_frame_count++;
       }
@@ -888,9 +896,13 @@ void netplay_sync_post_frame(netplay_t *netplay, bool stalled)
          /* Re-simulate this frame's input */
          netplay_resolve_input(netplay, netplay->replay_ptr, true);
 
+#ifdef HAVE_THREADS
          autosave_lock();
+#endif
          core_run();
+#ifdef HAVE_THREADS
          autosave_unlock();
+#endif
          netplay->replay_ptr = NEXT_PTR(netplay->replay_ptr);
          netplay->replay_frame_count++;
 

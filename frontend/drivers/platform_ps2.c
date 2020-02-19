@@ -156,7 +156,7 @@ static void frontend_ps2_init(void *data)
    int bootDeviceID;
 
    SifInitRpc(0);
-#if !defined(DEBUG)
+#if !defined(DEBUG) || defined(BUILD_FOR_PCSX2)
    /* Comment this line if you don't wanna debug the output */
    while(!SifIopReset(NULL, 0)){};
 #endif
@@ -225,7 +225,7 @@ static void frontend_ps2_init(void *data)
    waitUntilDeviceIsReady(bootDeviceID);
 
 #if defined(HAVE_FILE_LOGGER)
-   retro_main_log_file_init("retroarch.log");
+   retro_main_log_file_init("retroarch.log", false);
    verbosity_enable();
 #endif
 }
@@ -298,9 +298,9 @@ static bool frontend_ps2_set_fork(enum frontend_fork fork_mode)
 }
 #endif
 
-static void frontend_ps2_exitspawn(char *core_path, size_t core_path_size)
+static void frontend_ps2_exitspawn(char *s, size_t len, char *args)
 {
-   bool should_load_game = false;
+   bool should_load_content = false;
 #ifndef IS_SALAMANDER
    if (ps2_fork_mode == FRONTEND_FORK_NONE)
       return;
@@ -308,14 +308,14 @@ static void frontend_ps2_exitspawn(char *core_path, size_t core_path_size)
    switch (ps2_fork_mode)
    {
       case FRONTEND_FORK_CORE_WITH_ARGS:
-         should_load_game = true;
+         should_load_content = true;
          break;
       case FRONTEND_FORK_NONE:
       default:
          break;
    }
 #endif
-   frontend_ps2_exec(core_path, should_load_game);
+   frontend_ps2_exec(s, should_load_content);
 }
 
 static void frontend_ps2_shutdown(bool unused)
@@ -341,7 +341,7 @@ static int frontend_ps2_parse_drive_list(void *data, bool load_content)
    file_list_t *list = (file_list_t*)data;
    enum msg_hash_enums enum_idx = load_content ?
       MENU_ENUM_LABEL_FILE_DETECT_CORE_LIST_PUSH_DIR :
-      MSG_UNKNOWN;
+      MENU_ENUM_LABEL_FILE_BROWSER_DIRECTORY;
 
    menu_entries_append_enum(list,
          rootDevicePath(BOOT_DEVICE_MC0),
@@ -368,7 +368,7 @@ static int frontend_ps2_parse_drive_list(void *data, bool load_content)
          msg_hash_to_str(MENU_ENUM_LABEL_FILE_DETECT_CORE_LIST_PUSH_DIR),
          enum_idx,
          FILE_TYPE_DIRECTORY, 0, 0);
-#if defined(DEBUG)
+#if defined(DEBUG) && !defined(BUILD_FOR_PCSX2)
    menu_entries_append_enum(list,
          "host:",
          msg_hash_to_str(MENU_ENUM_LABEL_FILE_DETECT_CORE_LIST_PUSH_DIR),
@@ -416,5 +416,7 @@ frontend_ctx_driver_t frontend_ctx_ps2 = {
    NULL,                         /* set_sustained_performance_mode */
    NULL,                         /* get_cpu_model_name */
    NULL,                         /* get_user_language */
+   NULL,                         /* is_narrator_running */
+   NULL,                         /* accessibility_speak */
    "null",
 };

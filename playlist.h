@@ -26,6 +26,9 @@
 
 RETRO_BEGIN_DECLS
 
+/* Default maximum playlist size */
+#define COLLECTION_SIZE 99999
+
 typedef struct content_playlist playlist_t;
 
 enum playlist_runtime_status
@@ -33,6 +36,45 @@ enum playlist_runtime_status
    PLAYLIST_RUNTIME_UNKNOWN = 0,
    PLAYLIST_RUNTIME_MISSING,
    PLAYLIST_RUNTIME_VALID
+};
+
+enum playlist_file_mode
+{
+   PLAYLIST_LOAD = 0,
+   PLAYLIST_SAVE
+};
+
+enum playlist_label_display_mode
+{
+   LABEL_DISPLAY_MODE_DEFAULT = 0,
+   LABEL_DISPLAY_MODE_REMOVE_PARENTHESES,
+   LABEL_DISPLAY_MODE_REMOVE_BRACKETS,
+   LABEL_DISPLAY_MODE_REMOVE_PARENTHESES_AND_BRACKETS,
+   LABEL_DISPLAY_MODE_KEEP_REGION,
+   LABEL_DISPLAY_MODE_KEEP_DISC_INDEX,
+   LABEL_DISPLAY_MODE_KEEP_REGION_AND_DISC_INDEX
+};
+
+enum playlist_thumbnail_mode
+{
+   PLAYLIST_THUMBNAIL_MODE_DEFAULT = 0,
+   PLAYLIST_THUMBNAIL_MODE_OFF,
+   PLAYLIST_THUMBNAIL_MODE_SCREENSHOTS,
+   PLAYLIST_THUMBNAIL_MODE_TITLE_SCREENS,
+   PLAYLIST_THUMBNAIL_MODE_BOXARTS
+};
+
+/* TODO/FIXME - since gfx_thumbnail_path.h has now
+ * been divorced from the menu code, perhaps jdgleaver
+ * can refactor this? */
+
+/* Note: We already have a left/right enum defined
+ * in gfx_thumbnail_path.h - but we can't include
+ * menu code here, so have to make a 'duplicate'... */
+enum playlist_thumbnail_id
+{
+   PLAYLIST_THUMBNAIL_RIGHT = 0,
+   PLAYLIST_THUMBNAIL_LEFT
 };
 
 struct playlist_entry
@@ -45,6 +87,8 @@ struct playlist_entry
    char *crc32;
    char *subsystem_ident;
    char *subsystem_name;
+   char *runtime_str;
+   char *last_played_str;
    struct string_list *subsystem_roms;
    enum playlist_runtime_status runtime_status;
    unsigned runtime_hours;
@@ -98,6 +142,15 @@ void playlist_clear(playlist_t *playlist);
 size_t playlist_size(playlist_t *playlist);
 
 /**
+ * playlist_capacity:
+ * @playlist        	   : Playlist handle.
+ *
+ * Gets maximum capacity of playlist.
+ * Returns: maximum capacity of playlist.
+ **/
+size_t playlist_capacity(playlist_t *playlist);
+
+/**
  * playlist_get_index:
  * @playlist               : Playlist handle.
  * @idx                 : Index of playlist entry.
@@ -119,6 +172,21 @@ void playlist_delete_index(playlist_t *playlist,
       size_t idx);
 
 /**
+ * playlist_resolve_path:
+ * @mode      : PLAYLIST_LOAD or PLAYLIST_SAVE
+ * @path        : The path to be modified
+ *
+ * Resolves the path of an item, such as the content path or path to the core, to a format
+ * appropriate for saving or loading depending on the @mode parameter
+ *
+ * Can be platform specific. File paths for saving can be abbreviated to avoid saving absolute
+ * paths, as the base directory (home or application dir) may change after each subsequent
+ * install (iOS)
+ **/
+void playlist_resolve_path(enum playlist_file_mode mode,
+      char *path, size_t size);
+
+/**
  * playlist_push:
  * @playlist        	   : Playlist handle.
  * @path                : Path of new playlist entry.
@@ -128,10 +196,12 @@ void playlist_delete_index(playlist_t *playlist,
  * Push entry to top of playlist.
  **/
 bool playlist_push(playlist_t *playlist,
-      const struct playlist_entry *entry);
+      const struct playlist_entry *entry,
+      bool fuzzy_archive_match);
 
 bool playlist_push_runtime(playlist_t *playlist,
-      const struct playlist_entry *entry);
+      const struct playlist_entry *entry,
+      bool fuzzy_archive_match);
 
 void playlist_update(playlist_t *playlist, size_t idx,
       const struct playlist_entry *update_entry);
@@ -147,17 +217,17 @@ void playlist_update_runtime(playlist_t *playlist, size_t idx,
 
 void playlist_get_index_by_path(playlist_t *playlist,
       const char *search_path,
-      const struct playlist_entry **entry);
+      const struct playlist_entry **entry,
+      bool fuzzy_archive_match);
 
 bool playlist_entry_exists(playlist_t *playlist,
-      const char *path,
-      const char *crc32);
+      const char *path, bool fuzzy_archive_match);
 
 char *playlist_get_conf_path(playlist_t *playlist);
 
 uint32_t playlist_get_size(playlist_t *playlist);
 
-void playlist_write_file(playlist_t *playlist);
+void playlist_write_file(playlist_t *playlist, bool use_old_format);
 
 void playlist_write_runtime_file(playlist_t *playlist);
 
@@ -171,17 +241,27 @@ bool playlist_init_cached(const char *path, size_t size);
 
 void command_playlist_push_write(
       playlist_t *playlist,
-      const struct playlist_entry *entry);
+      const struct playlist_entry *entry,
+      bool fuzzy_archive_match,
+      bool use_old_format);
 
 void command_playlist_update_write(
       playlist_t *playlist,
       size_t idx,
-      const struct playlist_entry *entry);
+      const struct playlist_entry *entry,
+      bool use_old_format);
 
 /* Returns true if specified playlist index matches
  * specified content/core paths */
 bool playlist_index_is_valid(playlist_t *playlist, size_t idx,
       const char *path, const char *core_path);
+
+/* Returns true if specified playlist entries have
+ * identical content and core paths */
+bool playlist_entries_are_equal(
+      const struct playlist_entry *entry_a,
+      const struct playlist_entry *entry_b,
+      bool fuzzy_archive_match);
 
 void playlist_get_crc32(playlist_t *playlist, size_t idx,
       const char **crc32);
@@ -192,9 +272,15 @@ void playlist_get_db_name(playlist_t *playlist, size_t idx,
 
 char *playlist_get_default_core_path(playlist_t *playlist);
 char *playlist_get_default_core_name(playlist_t *playlist);
+enum playlist_label_display_mode playlist_get_label_display_mode(playlist_t *playlist);
+enum playlist_thumbnail_mode playlist_get_thumbnail_mode(
+      playlist_t *playlist, enum playlist_thumbnail_id thumbnail_id);
 
 void playlist_set_default_core_path(playlist_t *playlist, const char *core_path);
 void playlist_set_default_core_name(playlist_t *playlist, const char *core_name);
+void playlist_set_label_display_mode(playlist_t *playlist, enum playlist_label_display_mode label_display_mode);
+void playlist_set_thumbnail_mode(
+      playlist_t *playlist, enum playlist_thumbnail_id thumbnail_id, enum playlist_thumbnail_mode thumbnail_mode);
 
 RETRO_END_DECLS
 

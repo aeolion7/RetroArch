@@ -20,6 +20,7 @@
 #include <boolean.h>
 #include <string/stdstring.h>
 #include <file/file_path.h>
+#include <formats/image.h>
 
 #include "../font_driver.h"
 #include "../common/d3d_common.h"
@@ -36,9 +37,9 @@
 
 #ifdef HAVE_MENU
 #include "../../menu/menu_driver.h"
-#ifdef HAVE_MENU_WIDGETS
-#include "../../menu/widgets/menu_widgets.h"
 #endif
+#ifdef HAVE_GFX_WIDGETS
+#include "../gfx_widgets.h"
 #endif
 
 #include "wiiu/wiiu_dbg.h"
@@ -199,7 +200,7 @@ static void d3d12_overlay_enable(void* data, bool state)
       return;
 
    d3d12->overlays.enabled = state;
-   win32_show_cursor(state);
+   win32_show_cursor(d3d12, state);
 }
 
 static void d3d12_overlay_full_screen(void* data, bool enable)
@@ -358,17 +359,13 @@ static bool d3d12_gfx_set_shader(void* data, enum rarch_shader_type type, const 
       return false;
    }
 
-   conf = config_file_new(path);
-
-   if (!conf)
+   if (!(conf = video_shader_read_preset(path)))
       return false;
 
    d3d12->shader_preset = (struct video_shader*)calloc(1, sizeof(*d3d12->shader_preset));
 
    if (!video_shader_read_conf_preset(conf, d3d12->shader_preset))
       goto error;
-
-   video_shader_resolve_relative(d3d12->shader_preset, path);
 
    source = &d3d12->frame.texture[0];
    for (i = 0; i < d3d12->shader_preset->passes; source = &d3d12->pass[i++].rt)
@@ -895,8 +892,8 @@ static void d3d12_gfx_free(void* data)
    free(d3d12);
 }
 
-static void*
-d3d12_gfx_init(const video_info_t* video, const input_driver_t** input, void** input_data)
+static void *d3d12_gfx_init(const video_info_t* video, 
+      input_driver_t** input, void** input_data)
 {
 #ifdef HAVE_MONITOR
    MONITORINFOEX  current_mon;
@@ -995,7 +992,7 @@ d3d12_gfx_init(const video_info_t* video, const input_driver_t** input, void** i
    }
 
    d3d12_gfx_set_rotation(d3d12, 0);
-   video_driver_set_size(&d3d12->vp.full_width, &d3d12->vp.full_height);
+   video_driver_set_size(d3d12->vp.full_width, d3d12->vp.full_height);
    d3d12->chain.viewport.Width  = d3d12->vp.full_width;
    d3d12->chain.viewport.Height = d3d12->vp.full_height;
    d3d12->resize_viewport       = true;
@@ -1008,10 +1005,15 @@ d3d12_gfx_init(const video_info_t* video, const input_driver_t** input, void** i
    d3d12->frame.texture[0].srv_heap    = &d3d12->desc.srv_heap;
    d3d12_init_texture(d3d12->device, &d3d12->frame.texture[0]);
 
-   font_driver_init_osd(d3d12, false, video->is_threaded, FONT_DRIVER_RENDER_D3D12_API);
+   font_driver_init_osd(d3d12,
+         video,
+         false,
+         video->is_threaded,
+         FONT_DRIVER_RENDER_D3D12_API);
 
    {
       d3d12_fake_context.get_flags = d3d12_get_flags;
+      d3d12_fake_context.get_metrics = win32_get_metrics;
       video_context_driver_set(&d3d12_fake_context); 
       const char *shader_preset   = retroarch_get_shader_preset();
       enum rarch_shader_type type = video_shader_parse_type(shader_preset);
@@ -1196,7 +1198,7 @@ static bool d3d12_gfx_frame(
       d3d12->ubo_values.OutputSize.width  = d3d12->chain.viewport.Width;
       d3d12->ubo_values.OutputSize.height = d3d12->chain.viewport.Height;
 
-      video_driver_set_size(&video_info->width, &video_info->height);
+      video_driver_set_size(video_info->width, video_info->height);
    }
 
    D3D12ResetCommandAllocator(d3d12->queue.allocator);
@@ -1493,7 +1495,7 @@ static bool d3d12_gfx_frame(
    d3d12->sprites.enabled = true;
 
 #ifdef HAVE_MENU
-#ifndef HAVE_MENU_WIDGETS
+#ifndef HAVE_GFX_WIDGETS
    if (d3d12->menu.enabled)
 #endif
    {
@@ -1519,8 +1521,8 @@ static bool d3d12_gfx_frame(
          D3D12RSSetViewports(d3d12->queue.cmd, 1, &d3d12->chain.viewport);
          D3D12RSSetScissorRects(d3d12->queue.cmd, 1, &d3d12->chain.scissorRect);
          D3D12IASetVertexBuffers(d3d12->queue.cmd, 0, 1, &d3d12->sprites.vbo_view);
-         font_driver_render_msg(video_info, NULL, video_info->stat_text,
-               (const struct font_params*)&video_info->osd_stat_params);
+         font_driver_render_msg(d3d12, video_info, video_info->stat_text,
+               (const struct font_params*)&video_info->osd_stat_params, NULL);
       }
    }
 #ifdef HAVE_OVERLAY
@@ -1559,10 +1561,9 @@ static bool d3d12_gfx_frame(
    }
 #endif
 
-#ifdef HAVE_MENU
-#ifdef HAVE_MENU_WIDGETS
-   menu_widgets_frame(video_info);
-#endif
+#ifdef HAVE_GFX_WIDGETS
+   if (video_info->widgets_inited)
+      gfx_widgets_frame(video_info);
 #endif
 
    if (msg && *msg)
@@ -1572,7 +1573,7 @@ static bool d3d12_gfx_frame(
       D3D12RSSetScissorRects(d3d12->queue.cmd, 1, &d3d12->chain.scissorRect);
       D3D12IASetVertexBuffers(d3d12->queue.cmd, 0, 1, &d3d12->sprites.vbo_view);
 
-      font_driver_render_msg(video_info, NULL, msg, NULL);
+      font_driver_render_msg(d3d12, video_info, msg, NULL, NULL);
       dxgi_update_title(video_info);
    }
    d3d12->sprites.enabled = false;
@@ -1596,7 +1597,9 @@ static bool d3d12_gfx_frame(
    return true;
 }
 
-static void d3d12_gfx_set_nonblock_state(void* data, bool toggle)
+static void d3d12_gfx_set_nonblock_state(void* data, bool toggle,
+      bool adaptive_vsync_enabled,
+      unsigned swap_interval)
 {
    d3d12_video_t* d3d12 = (d3d12_video_t*)data;
    d3d12->chain.vsync   = !toggle;
@@ -1609,13 +1612,13 @@ static bool d3d12_gfx_alive(void* data)
 
    win32_check_window(&quit, &d3d12->resize_chain, &d3d12->vp.full_width, &d3d12->vp.full_height);
 
-   if (d3d12->resize_chain && d3d12->vp.full_width != 0 && d3d12->vp.full_height != 0)
-      video_driver_set_size(&d3d12->vp.full_width, &d3d12->vp.full_height);
+   if (     d3d12->resize_chain 
+         && d3d12->vp.full_width  != 0
+         && d3d12->vp.full_height != 0)
+      video_driver_set_size(d3d12->vp.full_width, d3d12->vp.full_height);
 
    return !quit;
 }
-
-static bool d3d12_gfx_focus(void* data) { return win32_has_focus(); }
 
 static bool d3d12_gfx_suppress_screensaver(void* data, bool enable)
 {
@@ -1703,11 +1706,6 @@ static void d3d12_set_menu_texture_enable(void* data,
    d3d12->menu.fullscreen = full_screen;
 }
 
-static void d3d12_gfx_show_mouse(void* data, bool state)
-{
-   win32_show_cursor(state);
-}
-
 static void d3d12_gfx_set_aspect_ratio(void* data, unsigned aspect_ratio_idx)
 {
    d3d12_video_t* d3d12 = (d3d12_video_t*)data;
@@ -1736,8 +1734,8 @@ static void d3d12_gfx_set_osd_msg(
    if (!d3d12 || !d3d12->sprites.enabled)
       return;
 
-   font_driver_render_msg(video_info, font, msg,
-         (const struct font_params*)params);
+   font_driver_render_msg(d3d12, video_info, msg,
+         (const struct font_params*)params, font);
 }
 
 static uintptr_t d3d12_gfx_load_texture(
@@ -1831,7 +1829,7 @@ static const video_poke_interface_t d3d12_poke_interface = {
    d3d12_set_menu_texture_frame,
    d3d12_set_menu_texture_enable,
    d3d12_gfx_set_osd_msg,
-   d3d12_gfx_show_mouse,
+   win32_show_cursor,
    NULL, /* grab_mouse_toggle */
    d3d12_gfx_get_current_shader,
    NULL, /* get_current_software_framebuffer */
@@ -1843,8 +1841,8 @@ static void d3d12_gfx_get_poke_interface(void* data, const video_poke_interface_
    *iface = &d3d12_poke_interface;
 }
 
-#if defined(HAVE_MENU) && defined(HAVE_MENU_WIDGETS)
-static bool d3d12_menu_widgets_enabled(void *data)
+#ifdef HAVE_GFX_WIDGETS
+static bool d3d12_gfx_widgets_enabled(void *data)
 {
    (void)data;
    return true;
@@ -1856,7 +1854,7 @@ video_driver_t video_d3d12 = {
    d3d12_gfx_frame,
    d3d12_gfx_set_nonblock_state,
    d3d12_gfx_alive,
-   d3d12_gfx_focus,
+   win32_has_focus,
    d3d12_gfx_suppress_screensaver,
    d3d12_gfx_has_windowed,
    d3d12_gfx_set_shader,
@@ -1876,7 +1874,7 @@ video_driver_t video_d3d12 = {
 #endif
    d3d12_gfx_get_poke_interface,
    NULL, /* d3d12_wrap_type_to_enum */
-#if defined(HAVE_MENU) && defined(HAVE_MENU_WIDGETS)
-   d3d12_menu_widgets_enabled
+#ifdef HAVE_GFX_WIDGETS
+   d3d12_gfx_widgets_enabled
 #endif
 };

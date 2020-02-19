@@ -25,13 +25,6 @@ const char *file_path_str(enum file_path_enum enum_idx)
 
    switch (enum_idx)
    {
-      case FILE_PATH_PROGRAM_NAME:
-#if defined(IS_SALAMANDER)
-         str = "RetroArch Salamander";
-#else
-         str = "RetroArch";
-#endif
-         break;
       case FILE_PATH_DETECT:
          str = "DETECT";
          break;
@@ -43,15 +36,6 @@ const char *file_path_str(enum file_path_enum enum_idx)
          break;
       case FILE_PATH_NUL:
          str = "nul";
-         break;
-      case FILE_PATH_LOG_WARN:
-         str = "[WARN]";
-         break;
-      case FILE_PATH_LOG_ERROR:
-         str = "[ERROR]";
-         break;
-      case FILE_PATH_LOG_INFO:
-         str = "[INFO]";
          break;
       case FILE_PATH_CGP_EXTENSION:
          str = ".cgp";
@@ -146,6 +130,9 @@ const char *file_path_str(enum file_path_enum enum_idx)
       case FILE_PATH_RDB_EXTENSION:
          str = ".rdb";
          break;
+      case FILE_PATH_RDB_EXTENSION_NO_DOT:
+         str = "rdb";
+         break;
       case FILE_PATH_ZIP_EXTENSION:
          str = ".zip";
          break;
@@ -171,7 +158,11 @@ const char *file_path_str(enum file_path_enum enum_idx)
          str = "http://thumbnailpacks.libretro.com";
          break;
       case FILE_PATH_LAKKA_URL:
+#ifdef HAVE_LAKKA_NIGHTLY
+         str = "http://nightly.builds.lakka.tv/.updater";
+#else
          str = "http://le.builds.lakka.tv";
+#endif
          break;
       case FILE_PATH_SHADERS_GLSL_ZIP:
          str = "shaders_glsl.zip";
@@ -235,6 +226,9 @@ const char *file_path_str(enum file_path_enum enum_idx)
          break;
       case FILE_PATH_EVENT_LOG_EXTENSION:
          str = ".log";
+         break;
+      case FILE_PATH_DISK_CONTROL_INDEX_EXTENSION:
+         str = ".ldci";
          break;
       case FILE_PATH_UNKNOWN:
       default:

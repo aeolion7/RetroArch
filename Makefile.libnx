@@ -21,6 +21,9 @@ OBJ :=
 
 DEFINES := -D__SWITCH__=1 -U__linux__ -U__linux -DGLM_FORCE_PURE=1 -DRARCH_CONSOLE -DRARCH_INTERNAL -DGLOBAL_CONFIG_DIR='"/switch"' -DHAVE_STB_VORBIS
 
+HAVE_DR_MP3 = 1
+HAVE_TRANSLATE = 1
+HAVE_AUDIOMIXER = 1
 HAVE_CC_RESAMPLER = 1
 HAVE_MENU_COMMON = 1
 HAVE_RTGA = 1
@@ -33,6 +36,7 @@ HAVE_LIBRETRODB = 1
 HAVE_STATIC_VIDEO_FILTERS = 1
 HAVE_STATIC_AUDIO_FILTERS = 1
 HAVE_MENU = 1
+HAVE_CONFIGFILE = 1
 HAVE_RUNAHEAD = 1
 HAVE_NETWORKING = 1
 HAVE_NETPLAYDISCOVERY = 1
@@ -49,7 +53,7 @@ HAVE_SWITCH = 1
 HAVE_LIBNX = 1
 HAVE_OPENGL = 1
 HAVE_LANGEXTRA = 1
-HAVE_MENU_WIDGETS = 1
+HAVE_GFX_WIDGETS = 1
 
 ifeq ($(HAVE_OPENGL), 1)
   HAVE_EGL = 1
@@ -59,7 +63,8 @@ ifeq ($(HAVE_OPENGL), 1)
   HAVE_XMB = 1
   HAVE_OZONE = 1
   HAVE_OVERLAY = 1
-  HAVE_VIDEO_LAYOUT = 0
+  HAVE_VIDEO_LAYOUT = 1
+  HAVE_GLSL = 1
 else
   HAVE_RGUI = 1
   HAVE_MATERIALUI = 0
@@ -112,9 +117,9 @@ APP_ICON := pkg/libnx/retroarch.jpg
 ARCH	:=	-march=armv8-a -mtune=cortex-a57 -mtp=soft -fPIE -mcpu=cortex-a57+crc+fp+simd
 
 CFLAGS := -g -Wall -O3 -ffast-math -ffunction-sections \
-          $(ARCH) $(DEFINES) -Ideps -Ideps/libz -Ilibretro-common/include -Ilibretro-common/include/compat/zlib -Ideps/stb -I$(LIBNX)/include -I$(PORTLIBS)/include/ -include $(LIBNX)/include/switch.h #$(shell $(PORTLIBS)/bin/freetype-config --cflags)
+          $(ARCH) $(DEFINES) $(INCLUDE_DIRS) -I$(LIBNX)/include -I$(PORTLIBS)/include/ -include $(LIBNX)/include/switch.h #$(shell $(PORTLIBS)/bin/freetype-config --cflags)
 
-CFLAGS += $(INCLUDE) -DSWITCH=1 -DHAVE_LIBNX=1 -DNXLINK=1 -DHAVE_SHADERPIPELINE -DHAVE_UPDATE_ASSETS -DHAVE_STB_FONT #-DHAVE_FREETYPE
+CFLAGS += $(INCLUDE) -DSWITCH=1 -DHAVE_LIBNX=1 -DNXLINK=1 -DHAVE_SHADERPIPELINE -DHAVE_ONLINE_UPDATER -DHAVE_UPDATE_ASSETS -DHAVE_UPDATE_CORES -DHAVE_STB_FONT #-DHAVE_FREETYPE
 
 ifeq ($(strip $(HAVE_STATIC_DUMMY)),1)
   CFLAGS	+=	-DHAVE_STATIC_DUMMY=1
@@ -124,6 +129,9 @@ CXXFLAGS	:= $(CFLAGS) -fno-rtti -fno-exceptions -std=gnu++11
 
 ASFLAGS	:=	-g $(ARCH)
 LDFLAGS	=	-specs=$(DEVKITPRO)/libnx/switch.specs $(ARCH) -Wl,--allow-multiple-definition -Wl,-Map,$(notdir $*.map)
+
+# add things from Makefile.common
+CFLAGS += $(DEF_FLAGS)
 
 LIBS	:= -lswresample -lavformat -lavcodec -lavutil -lswscale -lstdc++ -lbz2 -lpng -lz -lnx -lm
 

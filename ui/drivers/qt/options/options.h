@@ -89,6 +89,24 @@ public:
    QWidget *widget();
 };
 
+/***********************************************************
+   AI Service 
+************************************************************/
+class AIServiceCategory : public OptionsCategory
+{
+public:
+   AIServiceCategory(QWidget *parent);
+   QVector<OptionsPage*> pages();
+};
+
+class AIServicePage : public OptionsPage
+{
+   Q_OBJECT
+public:
+   AIServicePage(QObject *parent = nullptr);
+   QWidget *widget();
+};
+
 /************************************************************
    Video
 ************************************************************/
@@ -541,7 +559,7 @@ static inline QWidget *create_widget(enum menu_displaylist_ctl_state name)
    FormLayout          *layout = new FormLayout;
    file_list_t           *list = (file_list_t*)calloc(1, sizeof(*list));
 
-   menu_displaylist_build_list(list, name);
+   menu_displaylist_build_list(list, name, true);
 
    for (i = 0; i < list->size; i++)
    {

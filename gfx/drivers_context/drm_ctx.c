@@ -388,10 +388,16 @@ nextgpu:
 
    drm_setup(fd);
 
-   /* First mode is assumed to be the "optimal"
-    * one for get_video_size() purposes. */
-   drm->fb_width    = g_drm_connector->modes[0].hdisplay;
-   drm->fb_height   = g_drm_connector->modes[0].vdisplay;
+   /* Choose the optimal video mode for get_video_size():
+     - the current video mode from the CRTC
+     - otherwise pick first connector mode */
+   if (g_orig_crtc->mode_valid) {
+      drm->fb_width  = g_orig_crtc->mode.hdisplay;
+      drm->fb_height = g_orig_crtc->mode.vdisplay;
+   } else {
+      drm->fb_width  = g_drm_connector->modes[0].hdisplay;
+      drm->fb_height = g_drm_connector->modes[0].vdisplay;
+   }
 
    drmSetMaster(g_drm_fd);
 
@@ -502,17 +508,17 @@ static bool gbm_choose_xrgb8888_cb(void *display_data, EGLDisplay dpy, EGLConfig
    (void)display_data;
 
    /* Makes sure we have 8 bit color. */
-   if (!eglGetConfigAttrib(dpy, config, EGL_RED_SIZE, &r))
+   if (!egl_get_config_attrib(dpy, config, EGL_RED_SIZE, &r))
       return false;
-   if (!eglGetConfigAttrib(dpy, config, EGL_GREEN_SIZE, &g))
+   if (!egl_get_config_attrib(dpy, config, EGL_GREEN_SIZE, &g))
       return false;
-   if (!eglGetConfigAttrib(dpy, config, EGL_BLUE_SIZE, &b))
+   if (!egl_get_config_attrib(dpy, config, EGL_BLUE_SIZE, &b))
       return false;
 
    if (r != 8 || g != 8 || b != 8)
       return false;
 
-   if (!eglGetConfigAttrib(dpy, config, EGL_NATIVE_VISUAL_ID, &id))
+   if (!egl_get_config_attrib(dpy, config, EGL_NATIVE_VISUAL_ID, &id))
       return false;
 
    return id == GBM_FORMAT_XRGB8888;
@@ -757,7 +763,7 @@ static void gfx_ctx_drm_destroy(void *data)
 
 static void gfx_ctx_drm_input_driver(void *data,
       const char *joypad_name,
-      const input_driver_t **input, void **input_data)
+      input_driver_t **input, void **input_data)
 {
 #ifdef HAVE_X11
    settings_t *settings = config_get_ptr();
@@ -833,7 +839,7 @@ static bool gfx_ctx_drm_bind_api(void *video_driver,
          if ((major * 1000 + minor) >= 3001)
             return false;
 #endif
-         return eglBindAPI(EGL_OPENGL_API);
+         return egl_bind_api(EGL_OPENGL_API);
 #else
          break;
 #endif
@@ -844,13 +850,13 @@ static bool gfx_ctx_drm_bind_api(void *video_driver,
          if (major >= 3)
             return false;
 #endif
-         return eglBindAPI(EGL_OPENGL_ES_API);
+         return egl_bind_api(EGL_OPENGL_ES_API);
 #else
          break;
 #endif
       case GFX_CTX_OPENVG_API:
 #if defined(HAVE_EGL) && defined(HAVE_VG)
-         return eglBindAPI(EGL_OPENVG_API);
+         return egl_bind_api(EGL_OPENVG_API);
 #endif
       case GFX_CTX_NONE:
       default:
@@ -869,8 +875,6 @@ static gfx_ctx_proc_t gfx_ctx_drm_get_proc_address(const char *symbol)
       case GFX_CTX_OPENVG_API:
 #ifdef HAVE_EGL
          return egl_get_proc_address(symbol);
-#else
-         break;
 #endif
       case GFX_CTX_NONE:
       default:
@@ -928,26 +932,6 @@ static void gfx_ctx_drm_set_flags(void *data, uint32_t flags)
       drm->core_hw_context_enable = true;
 }
 
-void gfx_ctx_drm_update_window_title(void *data, void *data2)
-{
-   const settings_t *settings = config_get_ptr();
-   video_frame_info_t* video_info = (video_frame_info_t*)data2;
-
-   if (settings->bools.video_memory_show)
-   {
-      uint64_t mem_bytes_used = frontend_driver_get_used_memory();
-      uint64_t mem_bytes_total = frontend_driver_get_total_memory();
-      char         mem[128];
-
-      mem[0] = '\0';
-
-      snprintf(
-            mem, sizeof(mem), " || MEM: %.2f/%.2fMB", mem_bytes_used / (1024.0f * 1024.0f),
-            mem_bytes_total / (1024.0f * 1024.0f));
-      strlcat(video_info->fps_text, mem, sizeof(video_info->fps_text));
-   }
-}
-
 const gfx_ctx_driver_t gfx_ctx_drm = {
    gfx_ctx_drm_init,
    gfx_ctx_drm_destroy,
@@ -962,12 +946,12 @@ const gfx_ctx_driver_t gfx_ctx_drm = {
    NULL, /* get_video_output_next */
    NULL, /* get_metrics */
    NULL,
-   gfx_ctx_drm_update_window_title,
+   NULL, /* update_title */
    gfx_ctx_drm_check_window,
    NULL, /* set_resize */
    gfx_ctx_drm_has_focus,
    gfx_ctx_drm_suppress_screensaver,
-   NULL, /* has_windowed */
+   false, /* has_windowed */
    gfx_ctx_drm_swap_buffers,
    gfx_ctx_drm_input_driver,
    gfx_ctx_drm_get_proc_address,

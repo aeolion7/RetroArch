@@ -59,7 +59,7 @@ typedef struct video_display_server
    const char *ident;
 } video_display_server_t;
 
-void* video_display_server_init(void);
+void* video_display_server_init(enum rarch_display_type type);
 
 void video_display_server_destroy(void);
 
@@ -92,7 +92,6 @@ enum rotation video_display_server_get_screen_orientation(void);
 extern const video_display_server_t dispserv_win32;
 extern const video_display_server_t dispserv_x11;
 extern const video_display_server_t dispserv_android;
-extern const video_display_server_t dispserv_null;
 
 RETRO_END_DECLS
 

@@ -78,7 +78,7 @@ static void gdi_gfx_create(void)
 }
 
 static void *gdi_gfx_init(const video_info_t *video,
-      const input_driver_t **input, void **input_data)
+      input_driver_t **input, void **input_data)
 {
    unsigned full_x, full_y;
    gfx_ctx_input_t inp;
@@ -88,6 +88,7 @@ static void *gdi_gfx_init(const video_info_t *video,
    unsigned win_width = 0, win_height   = 0;
    unsigned temp_width = 0, temp_height = 0;
    settings_t *settings                 = config_get_ptr();
+   bool video_font_enable               = settings->bools.video_font_enable;
    gdi_t *gdi                           = (gdi_t*)calloc(1, sizeof(*gdi));
 
    if (!gdi)
@@ -162,7 +163,7 @@ static void *gdi_gfx_init(const video_info_t *video,
    /* Get real known video size, which might have been altered by context. */
 
    if (temp_width != 0 && temp_height != 0)
-      video_driver_set_size(&temp_width, &temp_height);
+      video_driver_set_size(temp_width, temp_height);
 
    video_driver_get_size(&temp_width, &temp_height);
 
@@ -173,8 +174,10 @@ static void *gdi_gfx_init(const video_info_t *video,
 
    video_context_driver_input_driver(&inp);
 
-   if (settings->bools.video_font_enable)
-      font_driver_init_osd(gdi, false,
+   if (video_font_enable)
+      font_driver_init_osd(gdi,
+            video,
+            false,
             video->is_threaded,
             FONT_DRIVER_RENDER_GDI);
 
@@ -358,7 +361,7 @@ static bool gdi_gfx_frame(void *data, const void *frame,
    free(info);
 
    if (msg)
-      font_driver_render_msg(video_info, NULL, msg, NULL);
+      font_driver_render_msg(gdi, video_info, msg, NULL, NULL);
 
    InvalidateRect(hwnd, NULL, false);
 
@@ -368,11 +371,7 @@ static bool gdi_gfx_frame(void *data, const void *frame,
    return true;
 }
 
-static void gdi_gfx_set_nonblock_state(void *data, bool toggle)
-{
-   (void)data;
-   (void)toggle;
-}
+static void gdi_gfx_set_nonblock_state(void *a, bool b, bool c, unsigned d) { }
 
 static bool gdi_gfx_alive(void *data)
 {
@@ -393,7 +392,7 @@ static bool gdi_gfx_alive(void *data)
    ret = !quit;
 
    if (temp_width != 0 && temp_height != 0)
-      video_driver_set_size(&temp_width, &temp_height);
+      video_driver_set_size(temp_width, temp_height);
 
    return ret;
 }
@@ -511,15 +510,6 @@ static void gdi_set_texture_frame(void *data,
    }
 }
 
-static void gdi_set_osd_msg(void *data,
-      video_frame_info_t *video_info,
-      const char *msg,
-      const void *params, void *font)
-{
-   font_driver_render_msg(video_info, font,
-         msg, (const struct font_params *)params);
-}
-
 static void gdi_get_video_output_size(void *data,
       unsigned *width, unsigned *height)
 {
@@ -628,7 +618,7 @@ static const video_poke_interface_t gdi_poke_interface = {
    NULL,
    gdi_set_texture_frame,
    NULL,
-   gdi_set_osd_msg,
+   font_driver_render_msg,
    NULL,
    NULL,                         /* grab_mouse_toggle */
    NULL,                         /* get_current_shader */

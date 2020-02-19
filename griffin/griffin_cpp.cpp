@@ -23,6 +23,18 @@
 #include <compat/posix_string.h>
 #endif
 
+#if defined(HAVE_OPENGL) && defined(HAVE_ANGLE)
+#ifndef HAVE_OPENGLES
+#define HAVE_OPENGLES  1
+#endif
+#if !defined(HAVE_OPENGLES3) && !defined(HAVE_OPENGLES2)
+#define HAVE_OPENGLES3 1
+#endif
+#ifndef HAVE_EGL
+#define HAVE_EGL       1
+#endif
+#endif
+
 /*============================================================
 MENU
 ============================================================ */
@@ -48,7 +60,9 @@ UI
 #include "../ui/drivers/qt/ui_qt_msg_window.cpp"
 #include "../ui/drivers/qt/ui_qt_application.cpp"
 #include "../ui/drivers/qt/gridview.cpp"
+#if defined(HAVE_CG) || defined(HAVE_GLSL) || defined(HAVE_SLANG) || defined(HAVE_HLSL)
 #include "../ui/drivers/qt/shaderparamsdialog.cpp"
+#endif
 #include "../ui/drivers/qt/coreoptionsdialog.cpp"
 #include "../ui/drivers/qt/filedropwidget.cpp"
 #include "../ui/drivers/qt/coreinfodialog.cpp"
@@ -61,17 +75,12 @@ UI
 #include "../ui/drivers/qt/playlistthumbnaildownload.cpp"
 #ifdef HAVE_MENU
 #include "../ui/drivers/qt/settingswidgets.cpp"
-#include "../ui/drivers/qt/options/drivers.cpp"
+#include "../ui/drivers/qt/options/generic.cpp"
 #include "../ui/drivers/qt/options/video.cpp"
 #include "../ui/drivers/qt/options/audio.cpp"
 #include "../ui/drivers/qt/options/saving.cpp"
-#include "../ui/drivers/qt/options/throttle.cpp"
 #include "../ui/drivers/qt/options/osd.cpp"
 #include "../ui/drivers/qt/options/input.cpp"
-#include "../ui/drivers/qt/options/directory.cpp"
-#include "../ui/drivers/qt/options/logging.cpp"
-#include "../ui/drivers/qt/options/core.cpp"
-#include "../ui/drivers/qt/options/configuration.cpp"
 #include "../ui/drivers/qt/options/latency.cpp"
 #include "../ui/drivers/qt/options/playlists.cpp"
 #include "../ui/drivers/qt/options/user.cpp"
@@ -88,7 +97,9 @@ UI
 #include "../ui/drivers/qt/moc_filedropwidget.cpp"
 #include "../ui/drivers/qt/moc_gridview.cpp"
 #include "../ui/drivers/qt/moc_playlistentrydialog.cpp"
+#if defined(HAVE_CG) || defined(HAVE_GLSL) || defined(HAVE_SLANG) || defined(HAVE_HLSL)
 #include "../ui/drivers/qt/moc_shaderparamsdialog.cpp"
+#endif
 #include "../ui/drivers/qt/moc_ui_qt_load_core_window.cpp"
 #include "../ui/drivers/qt/moc_viewoptionsdialog.cpp"
 #endif
@@ -115,8 +126,7 @@ VIDEO DRIVER
 #include "../deps/SPIRV-Cross/spirv_parser.cpp"
 #include "../deps/SPIRV-Cross/spirv_cross_parsed_ir.cpp"
 #ifdef HAVE_SLANG
-#include "../gfx/drivers_shader/glslang_util.cpp"
-#include "../gfx/drivers_shader/slang_preprocess.cpp"
+#include "../gfx/drivers_shader/glslang_util_cxx.cpp"
 #include "../gfx/drivers_shader/slang_process.cpp"
 #include "../gfx/drivers_shader/slang_reflection.cpp"
 #endif
@@ -125,10 +135,6 @@ VIDEO DRIVER
 /*============================================================
 FONTS
 ============================================================ */
-#if defined(_XBOX360)
-#include "../gfx/drivers_font/xdk360_fonts.cpp"
-#endif
-
 #ifdef WANT_GLSLANG
 #ifdef _WIN32
 #include "../deps/glslang/glslang/glslang/OSDependent/Windows/ossource.cpp"
@@ -145,11 +151,7 @@ FONTS
 #include "../deps/discord-rpc/src/serialization.cpp"
 
 #if defined(_WIN32)
-#include "../deps/discord-rpc/src/discord_register_win.cpp"
 #include "../deps/discord-rpc/src/connection_win.cpp"
-#endif
-#if defined(__linux__)
-#include "../deps/discord-rpc/src/discord_register_linux.cpp"
 #endif
 #if defined(__unix__) || defined(__APPLE__)
 #include "../deps/discord-rpc/src/connection_unix.cpp"

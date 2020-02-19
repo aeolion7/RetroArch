@@ -93,18 +93,16 @@ static void *gfx_ctx_vivante_init(video_frame_info_t *video_info, void *video_dr
    system("setterm -cursor off");
 
 #ifdef HAVE_EGL
-   if (!egl_init_context(&viv->egl, EGL_NONE, EGL_DEFAULT_DISPLAY, &major, &minor,
+   if (!egl_init_context(&viv->egl, EGL_NONE,
+            EGL_DEFAULT_DISPLAY, &major, &minor,
             &n, attribs, NULL))
-   {
-      egl_report_error();
       goto error;
-   }
 #endif
 
    return viv;
 
 error:
-   RARCH_ERR("[Vivante fbdev]: EGL error: %d.\n", eglGetError());
+   egl_report_error();
    gfx_ctx_vivante_destroy(viv);
    return NULL;
 }
@@ -164,10 +162,7 @@ static bool gfx_ctx_vivante_set_video_mode(void *data,
 
 #ifdef HAVE_EGL
    if (!egl_create_context(&viv->egl, attribs))
-   {
-      egl_report_error();
       goto error;
-   }
 #endif
 
    viv->native_window = fbCreateWindow(fbGetDisplayByIndex(0), 0, 0, 0, 0);
@@ -180,14 +175,14 @@ static bool gfx_ctx_vivante_set_video_mode(void *data,
    return true;
 
 error:
-   RARCH_ERR("[Vivante fbdev]: EGL error: %d.\n", eglGetError());
+   egl_report_error();
    gfx_ctx_vivante_destroy(data);
    return false;
 }
 
 static void gfx_ctx_vivante_input_driver(void *data,
       const char *name,
-      const input_driver_t **input, void **input_data)
+      input_driver_t **input, void **input_data)
 {
    *input      = NULL;
    *input_data = NULL;
@@ -291,7 +286,7 @@ const gfx_ctx_driver_t gfx_ctx_vivante_fbdev = {
    NULL, /* set_resize */
    gfx_ctx_vivante_has_focus,
    gfx_ctx_vivante_suppress_screensaver,
-   NULL, /* has_windowed */
+   false, /* has_windowed */
    gfx_ctx_vivante_swap_buffers,
    gfx_ctx_vivante_input_driver,
    gfx_ctx_vivante_get_proc_address,

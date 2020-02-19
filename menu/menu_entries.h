@@ -30,17 +30,14 @@
 
 RETRO_BEGIN_DECLS
 
+#define MENU_SUBLABEL_MAX_LENGTH 1024
+
 enum menu_entries_ctl_state
 {
    MENU_ENTRIES_CTL_NONE = 0,
-   MENU_ENTRIES_CTL_DEINIT,
-   MENU_ENTRIES_CTL_INIT,
    MENU_ENTRIES_CTL_LIST_GET,
    MENU_ENTRIES_CTL_LIST_DEINIT,
-   MENU_ENTRIES_CTL_LIST_INIT,
    MENU_ENTRIES_CTL_SETTINGS_GET,
-   MENU_ENTRIES_CTL_SETTINGS_DEINIT,
-   MENU_ENTRIES_CTL_SETTINGS_INIT,
    MENU_ENTRIES_CTL_SET_REFRESH,
    MENU_ENTRIES_CTL_UNSET_REFRESH,
    MENU_ENTRIES_CTL_NEEDS_REFRESH,
@@ -80,7 +77,7 @@ typedef struct menu_ctx_list
 
 typedef struct menu_file_list_cbs
 {
-   char action_sublabel_cache[512];
+   char action_sublabel_cache[MENU_SUBLABEL_MAX_LENGTH];
    char action_title_cache   [512];
 
    enum msg_hash_enums enum_idx;
@@ -110,7 +107,7 @@ typedef struct menu_file_list_cbs
    int (*action_iterate)(const char *label, unsigned action);
    int (*action_deferred_push)(menu_displaylist_info_t *info);
    int (*action_select)(const char *path, const char *label, unsigned type,
-         size_t idx);
+         size_t idx, size_t entry_idx);
    int (*action_get_title)(const char *path, const char *label,
          unsigned type, char *s, size_t len);
    int (*action_ok)(const char *path, const char *label, unsigned type,
@@ -119,7 +116,8 @@ typedef struct menu_file_list_cbs
          size_t idx);
    int (*action_scan)(const char *path, const char *label, unsigned type,
          size_t idx);
-   int (*action_start)(unsigned type,  const char *label);
+   int (*action_start)(const char *path, const char *label, unsigned type,
+         size_t idx, size_t entry_idx);
    int (*action_info)(unsigned type,  const char *label);
    int (*action_content_list_switch)(void *data, void *userdata, const char
          *path, const char *label, unsigned type);
@@ -210,7 +208,7 @@ typedef struct menu_entry
    size_t entry_idx;
    char path[255];
    char label[255];
-   char sublabel[512];
+   char sublabel[MENU_SUBLABEL_MAX_LENGTH];
    char rich_label[255];
    char value[255];
    char password_value[255];
@@ -279,10 +277,14 @@ void menu_entry_get(menu_entry_t *entry, size_t stack_idx,
 
 int menu_entry_select(uint32_t i);
 
-int menu_entry_action(menu_entry_t *entry,
-                      unsigned i, enum menu_action action);
+int menu_entry_action(
+      menu_entry_t *entry, size_t i, enum menu_action action);
 
 void menu_entry_init(menu_entry_t *entry);
+
+void get_current_menu_value(char* retstr, size_t max);
+void get_current_menu_label(char* retstr, size_t max);
+void get_current_menu_sublabel(char* retstr, size_t max);
 
 RETRO_END_DECLS
 

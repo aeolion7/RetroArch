@@ -130,8 +130,9 @@ int font_renderer_create_default(
       void **handle,
       const char *font_path, unsigned font_size);
 
-void font_driver_render_msg(video_frame_info_t *video_info,
-      void *font_data, const char *msg, const struct font_params *params);
+void font_driver_render_msg(void *data,
+      video_frame_info_t *video_info,
+      const char *msg, const void *params, void *font_data);
 
 void font_driver_bind_block(void *font_data, void *block);
 
@@ -152,9 +153,11 @@ font_data_t *font_driver_init_first(
 
 void font_driver_init_osd(
       void *video_data,
+      const void *video_info_data,
       bool threading_hint,
       bool is_threaded,
       enum font_driver_render_api api);
+
 void font_driver_free_osd(void);
 
 int font_driver_get_line_height(void *font_data, float scale);
@@ -162,8 +165,6 @@ int font_driver_get_line_height(void *font_data, float scale);
 extern font_renderer_t gl_raster_font;
 extern font_renderer_t gl_core_raster_font;
 extern font_renderer_t gl1_raster_font;
-extern font_renderer_t libdbg_font;
-extern font_renderer_t d3d_xbox360_font;
 extern font_renderer_t d3d_xdk1_font;
 extern font_renderer_t d3d_win32_font;
 extern font_renderer_t ps2_font;
@@ -178,6 +179,7 @@ extern font_renderer_t d3d12_font;
 extern font_renderer_t caca_font;
 extern font_renderer_t gdi_font;
 extern font_renderer_t vga_font;
+extern font_renderer_t fpga_font;
 extern font_renderer_t sixel_font;
 extern font_renderer_t switch_font;
 

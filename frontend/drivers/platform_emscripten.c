@@ -47,28 +47,14 @@
 #include "../../file_path_special.h"
 
 void RWebAudioRecalibrateTime(void);
+void dummyErrnoCodes(void);
 
-static unsigned emscripten_fullscreen_reinit;
 static unsigned emscripten_frame_count = 0;
-
-static EM_BOOL emscripten_fullscreenchange_cb(int event_type,
-   const EmscriptenFullscreenChangeEvent *fullscreen_change_event,
-   void *user_data)
-{
-   (void)event_type;
-   (void)fullscreen_change_event;
-   (void)user_data;
-
-   emscripten_fullscreen_reinit = 5;
-
-   return EM_TRUE;
-}
 
 static void emscripten_mainloop(void)
 {
    int ret;
    video_frame_info_t video_info;
-   unsigned sleep_ms = 0;
 
    RWebAudioRecalibrateTime();
 
@@ -92,16 +78,7 @@ static void emscripten_mainloop(void)
       }
    }
 
-   if (emscripten_fullscreen_reinit != 0)
-   {
-      if (--emscripten_fullscreen_reinit == 0)
-         command_event(CMD_EVENT_REINIT, NULL);
-   }
-
-   ret = runloop_iterate(&sleep_ms);
-
-   if (ret == 1 && sleep_ms > 0)
-      retro_sleep(sleep_ms);
+   ret = runloop_iterate();
 
    task_queue_check();
 
@@ -114,7 +91,7 @@ static void emscripten_mainloop(void)
 
 void cmd_savefiles(void)
 {
-   event_save_files();
+   command_event(CMD_EVENT_SAVE_FILES, NULL);
 }
 
 void cmd_save_state(void)
@@ -224,20 +201,12 @@ static void frontend_emscripten_get_env(int *argc, char *argv[],
 
 int main(int argc, char *argv[])
 {
-   EMSCRIPTEN_RESULT r;
+   dummyErrnoCodes();
 
    emscripten_set_canvas_element_size("#canvas", 800, 600);
    emscripten_set_element_css_size("#canvas", 800.0, 600.0);
    emscripten_set_main_loop(emscripten_mainloop, 0, 0);
    rarch_main(argc, argv, NULL);
-
-   r = emscripten_set_fullscreenchange_callback("#document", NULL, false,
-      emscripten_fullscreenchange_cb);
-   if (r != EMSCRIPTEN_RESULT_SUCCESS)
-   {
-      RARCH_ERR(
-         "[EMSCRIPTEN/CTX] failed to create fullscreen callback: %d\n", r);
-   }
 
    return 0;
 }
@@ -271,5 +240,7 @@ frontend_ctx_driver_t frontend_ctx_emscripten = {
    NULL,                         /* set_sustained_performance_mode */
    NULL,                         /* get_cpu_model_name */
    NULL,                         /* get_user_language */
+   NULL,                         /* is_narrator_running */
+   NULL,                         /* accessibility_speak */
    "emscripten"
 };

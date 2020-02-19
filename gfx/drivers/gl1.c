@@ -34,9 +34,9 @@
 
 #ifdef HAVE_MENU
 #include "../../menu/menu_driver.h"
-#ifdef HAVE_MENU_WIDGETS
-#include "../../menu/widgets/menu_widgets.h"
 #endif
+#ifdef HAVE_GFX_WIDGETS
+#include "../gfx_widgets.h"
 #endif
 
 #include "../font_driver.h"
@@ -54,6 +54,10 @@
 
 #ifdef HAVE_THREADS
 #include "../video_thread_wrapper.h"
+#endif
+
+#ifdef VITA
+static bool vgl_inited = false;
 #endif
 
 static unsigned char *gl1_menu_frame = NULL;
@@ -108,16 +112,114 @@ static const GLfloat gl1_white_color[] = {
    if (gl1_shared_context_use) \
       gl1->ctx_driver->bind_hw_render(gl1->ctx_data, enable)
 
-static void gl1_render_overlay(gl1_t *gl, video_frame_info_t *video_info);
-static void gl1_free_overlay(gl1_t *gl);
+#ifdef HAVE_OVERLAY
+static void gl1_render_overlay(gl1_t *gl, video_frame_info_t *video_info)
+{
+   unsigned i;
+   unsigned width                      = video_info->width;
+   unsigned height                     = video_info->height;
+
+   glEnable(GL_BLEND);
+
+   if (gl->overlay_full_screen)
+      glViewport(0, 0, width, height);
+
+   gl->coords.vertex    = gl->overlay_vertex_coord;
+   gl->coords.tex_coord = gl->overlay_tex_coord;
+   gl->coords.color     = gl->overlay_color_coord;
+   gl->coords.vertices  = 4 * gl->overlays;
+
+   glMatrixMode(GL_PROJECTION);
+   glPushMatrix();
+   glLoadIdentity();
+
+   for (i = 0; i < gl->overlays; i++)
+   {
+      glBindTexture(GL_TEXTURE_2D, gl->overlay_tex[i]);
+      glDrawArrays(GL_TRIANGLE_STRIP, 4 * i, 4);
+   }
+
+   glDisable(GL_BLEND);
+   gl->coords.vertex    = gl->vertex_ptr;
+   gl->coords.tex_coord = gl->tex_info.coord;
+   gl->coords.color     = gl->white_color_ptr;
+   gl->coords.vertices  = 4;
+   if (gl->overlay_full_screen)
+      glViewport(gl->vp.x, gl->vp.y, gl->vp.width, gl->vp.height);
+}
+
+static void gl1_free_overlay(gl1_t *gl)
+{
+   glDeleteTextures(gl->overlays, gl->overlay_tex);
+
+   free(gl->overlay_tex);
+   free(gl->overlay_vertex_coord);
+   free(gl->overlay_tex_coord);
+   free(gl->overlay_color_coord);
+   gl->overlay_tex          = NULL;
+   gl->overlay_vertex_coord = NULL;
+   gl->overlay_tex_coord    = NULL;
+   gl->overlay_color_coord  = NULL;
+   gl->overlays             = 0;
+}
+
 static void gl1_overlay_vertex_geom(void *data,
       unsigned image,
       float x, float y,
-      float w, float h);
+      float w, float h)
+{
+   GLfloat *vertex = NULL;
+   gl1_t *gl        = (gl1_t*)data;
+
+   if (!gl)
+      return;
+
+   if (image > gl->overlays)
+   {
+      RARCH_ERR("[GL]: Invalid overlay id: %u\n", image);
+      return;
+   }
+
+   vertex          = (GLfloat*)&gl->overlay_vertex_coord[image * 8];
+
+   /* Flipped, so we preserve top-down semantics. */
+   y               = 1.0f - y;
+   h               = -h;
+
+   vertex[0]       = x;
+   vertex[1]       = y;
+   vertex[2]       = x + w;
+   vertex[3]       = y;
+   vertex[4]       = x;
+   vertex[5]       = y + h;
+   vertex[6]       = x + w;
+   vertex[7]       = y + h;
+}
+
 static void gl1_overlay_tex_geom(void *data,
       unsigned image,
       GLfloat x, GLfloat y,
-      GLfloat w, GLfloat h);
+      GLfloat w, GLfloat h)
+{
+   GLfloat *tex = NULL;
+   gl1_t *gl     = (gl1_t*)data;
+
+   if (!gl)
+      return;
+
+   tex          = (GLfloat*)&gl->overlay_tex_coord[image * 8];
+
+   tex[0]       = x;
+   tex[1]       = y;
+   tex[2]       = x + w;
+   tex[3]       = y;
+   tex[4]       = x;
+   tex[5]       = y + h;
+   tex[6]       = x + w;
+   tex[7]       = y + h;
+}
+
+#endif
 
 static bool is_pot(unsigned x)
 {
@@ -130,7 +232,7 @@ static unsigned get_pot(unsigned x)
 }
 
 static void *gl1_gfx_init(const video_info_t *video,
-      const input_driver_t **input, void **input_data)
+      input_driver_t **input, void **input_data)
 {
    unsigned full_x, full_y;
    gfx_ctx_input_t inp;
@@ -187,7 +289,14 @@ static void *gl1_gfx_init(const video_info_t *video,
    full_y      = mode.height;
    mode.width  = 0;
    mode.height = 0;
-
+#ifdef VITA
+   if (!vgl_inited) {
+      vglInitExtended(0x1400000, full_x, full_y, 0x100000, SCE_GXM_MULTISAMPLE_4X);
+      vglUseVram(GL_TRUE);
+      vglStartRendering();
+      vgl_inited = true;
+   }
+#endif
    /* Clear out potential error flags in case we use cached context. */
    glGetError();
 
@@ -211,7 +320,14 @@ static void *gl1_gfx_init(const video_info_t *video,
 
    interval = video->swap_interval;
 
-   video_context_driver_swap_interval(&interval);
+   if (ctx_driver->swap_interval)
+   {
+      bool adaptive_vsync_enabled            = video_driver_test_all_flags(
+            GFX_CTX_FLAGS_ADAPTIVE_VSYNC) && video->adaptive_vsync;
+      if (adaptive_vsync_enabled && interval == 1)
+         interval = -1;
+      ctx_driver->swap_interval(gl1->ctx_data, interval);
+   }
 
    if (!video_context_driver_set_video_mode(&mode))
       goto error;
@@ -231,7 +347,7 @@ static void *gl1_gfx_init(const video_info_t *video,
    /* Get real known video size, which might have been altered by context. */
 
    if (temp_width != 0 && temp_height != 0)
-      video_driver_set_size(&temp_width, &temp_height);
+      video_driver_set_size(temp_width, temp_height);
 
    video_driver_get_size(&temp_width, &temp_height);
 
@@ -278,11 +394,13 @@ static void *gl1_gfx_init(const video_info_t *video,
    video_context_driver_input_driver(&inp);
 
    if (settings->bools.video_font_enable)
-      font_driver_init_osd(gl1, false,
+      font_driver_init_osd(gl1,
+            video,
+            false,
             video->is_threaded,
             FONT_DRIVER_RENDER_OPENGL1_API);
 
-   gl1->smooth = settings->bools.video_smooth;
+   gl1->smooth        = settings->bools.video_smooth;
    gl1->supports_bgra = string_list_find_elem(gl1->extensions, "GL_EXT_bgra");
 
    glDisable(GL_BLEND);
@@ -290,7 +408,9 @@ static void *gl1_gfx_init(const video_info_t *video,
    glDisable(GL_CULL_FACE);
    glDisable(GL_STENCIL_TEST);
    glDisable(GL_SCISSOR_TEST);
+#ifndef VITA
    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+#endif
    glGenTextures(1, &gl1->tex);
    glGenTextures(1, &gl1->menu_tex);
 
@@ -441,10 +561,39 @@ void gl1_gfx_set_viewport(gl1_t *gl1,
 
 static void draw_tex(gl1_t *gl1, int pot_width, int pot_height, int width, int height, GLuint tex, const void *frame_to_copy)
 {
+   uint8_t *frame       = NULL;
+   uint8_t *frame_rgba  = NULL;
    /* FIXME: For now, everything is uploaded as BGRA8888, I could not get 444 or 555 to work, and there is no 565 support in GL 1.1 either. */
    GLint internalFormat = GL_RGB8;
-   GLenum format = (gl1->supports_bgra ? GL_BGRA_EXT : GL_RGBA);
-   GLenum type = GL_UNSIGNED_BYTE;
+   GLenum format        = gl1->supports_bgra ? GL_BGRA_EXT : GL_RGBA;
+   GLenum type          = GL_UNSIGNED_BYTE;
+
+   float vertices[] = {
+	   -1.0f, -1.0f, 0.0f,
+	   -1.0f, 1.0f, 0.0f,
+	   1.0f, -1.0f, 0.0f,
+	   1.0f, 1.0f, 0.0f,
+   };
+
+   float colors[] = {
+      1.0f, 1.0f, 1.0f, 1.0f,
+      1.0f, 1.0f, 1.0f, 1.0f,
+      1.0f, 1.0f, 1.0f, 1.0f,
+      1.0f, 1.0f, 1.0f, 1.0f
+   };
+
+   float norm_width     = (1.0f / (float)pot_width) * (float)width;
+   float norm_height    = (1.0f / (float)pot_height) * (float)height;
+   
+   float texcoords[] = {
+      0.0f, 0.0f,
+      0.0f, 0.0f,
+      0.0f, 0.0f,
+      0.0f, 0.0f
+   };
+   
+   texcoords[1] = texcoords[5] = norm_height;
+   texcoords[4] = texcoords[6] = norm_width;
 
    glDisable(GL_DEPTH_TEST);
    glDisable(GL_CULL_FACE);
@@ -452,16 +601,40 @@ static void draw_tex(gl1_t *gl1, int pot_width, int pot_height, int width, int h
    glDisable(GL_SCISSOR_TEST);
    glEnable(GL_TEXTURE_2D);
 
-   /* multi-texture not part of GL 1.1 */
+   /* Multi-texture not part of GL 1.1 */
    /*glActiveTexture(GL_TEXTURE0);*/
 
+#ifndef VITA
    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
    glPixelStorei(GL_UNPACK_ROW_LENGTH, pot_width);
+#endif
    glBindTexture(GL_TEXTURE_2D, tex);
 
-   /* TODO: We could implement red/blue swap if client GL does not support BGRA... but even MS GDI Generic supports it */
-   glTexImage2D(GL_TEXTURE_2D, 0, internalFormat, pot_width, pot_height, 0, format, type, NULL);
-   glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, height, format, type, frame_to_copy);
+   frame = (uint8_t*)frame_to_copy;
+   if (!gl1->supports_bgra)
+   {
+      frame_rgba = (uint8_t*)malloc(pot_width * pot_height * 4);
+      if (frame_rgba)
+      {
+         int x, y;
+         for (y = 0; y < pot_height; y++)
+         {
+            for (x = 0; x < pot_width; x++)
+            {
+               int index             = (y * pot_width + x) * 4;
+               frame_rgba[index + 2] = frame[index + 0];
+               frame_rgba[index + 1] = frame[index + 1];
+               frame_rgba[index + 0] = frame[index + 2];
+               frame_rgba[index + 3] = frame[index + 3];
+            }
+         }
+         frame = frame_rgba;
+      }
+   }
+
+   glTexImage2D(GL_TEXTURE_2D, 0, internalFormat, pot_width, pot_height, 0, format, type, frame);
+   if (frame_rgba)
+       free(frame_rgba);
 
    if (tex == gl1->tex)
    {
@@ -485,62 +658,22 @@ static void draw_tex(gl1_t *gl1, int pot_width, int pot_height, int width, int h
    glPushMatrix();
    glLoadIdentity();
 
-   /* stock coord set does not handle POT, disable for now */
-   /*glEnableClientState(GL_COLOR_ARRAY);
-   glEnableClientState(GL_VERTEX_ARRAY);
-   glEnableClientState(GL_TEXTURE_COORD_ARRAY);
-
-   glColorPointer(4, GL_FLOAT, 0, gl1->coords.color);
-   glVertexPointer(2, GL_FLOAT, 0, gl1->coords.vertex);
-   glTexCoordPointer(2, GL_FLOAT, 0, gl1->coords.tex_coord);
-
-   glDrawArrays(GL_TRIANGLES, 0, gl1->coords.vertices);
-
-   glDisableClientState(GL_TEXTURE_COORD_ARRAY);
-   glDisableClientState(GL_VERTEX_ARRAY);
-   glDisableClientState(GL_COLOR_ARRAY);*/
-
    if (gl1->rotation && tex == gl1->tex)
       glRotatef(gl1->rotation, 0.0f, 0.0f, 1.0f);
+   
+   glEnableClientState(GL_COLOR_ARRAY);
+   glEnableClientState(GL_VERTEX_ARRAY);
+   glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+   
+   glColorPointer(4, GL_FLOAT, 0, colors);
+   glVertexPointer(3, GL_FLOAT, 0, vertices);
+   glTexCoordPointer(2, GL_FLOAT, 0, texcoords);
 
-   glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
-
-   glBegin(GL_QUADS);
-
-   {
-      float tex_BL[2] = {0.0f, 0.0f};
-      float tex_BR[2] = {1.0f, 0.0f};
-      float tex_TL[2] = {0.0f, 1.0f};
-      float tex_TR[2] = {1.0f, 1.0f};
-      float *tex_mirror_BL = tex_TL;
-      float *tex_mirror_BR = tex_TR;
-      float *tex_mirror_TL = tex_BL;
-      float *tex_mirror_TR = tex_BR;
-      float norm_width = (1.0f / (float)pot_width) * (float)width;
-      float norm_height = (1.0f / (float)pot_height) * (float)height;
-
-      /* remove extra POT padding */
-      tex_mirror_BR[0] = norm_width;
-      tex_mirror_TR[0] = norm_width;
-
-      /* normally this would be 1.0 - height, but we're drawing upside-down */
-      tex_mirror_BL[1] = norm_height;
-      tex_mirror_BR[1] = norm_height;
-
-      glTexCoord2f(tex_mirror_BL[0], tex_mirror_BL[1]);
-      glVertex2f(-1.0f, -1.0f);
-
-      glTexCoord2f(tex_mirror_TL[0], tex_mirror_TL[1]);
-      glVertex2f(-1.0f, 1.0f);
-
-      glTexCoord2f(tex_mirror_TR[0], tex_mirror_TR[1]);
-      glVertex2f(1.0f, 1.0f);
-
-      glTexCoord2f(tex_mirror_BR[0], tex_mirror_BR[1]);
-      glVertex2f(1.0f, -1.0f);
-   }
-
-   glEnd();
+   glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+   
+   glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+   glDisableClientState(GL_VERTEX_ARRAY);
+   glDisableClientState(GL_COLOR_ARRAY);
 
    glMatrixMode(GL_MODELVIEW);
    glPopMatrix();
@@ -554,10 +687,11 @@ static void gl1_readback(
       unsigned fmt, unsigned type,
       void *src)
 {
+#ifndef VITA
    glPixelStorei(GL_PACK_ALIGNMENT, alignment);
    glPixelStorei(GL_PACK_ROW_LENGTH, 0);
    glReadBuffer(GL_BACK);
-
+#endif
    glReadPixels(gl1->vp.x, gl1->vp.y,
          gl1->vp.width, gl1->vp.height,
          (GLenum)fmt, (GLenum)type, (GLvoid*)src);
@@ -578,7 +712,7 @@ static bool gl1_gfx_frame(void *data, const void *frame,
    unsigned pot_height       = 0;
 
    gl1_context_bind_hw_render(gl1, false);
-
+   
    /* FIXME: Force these settings off as they interfere with the rendering */
    video_info->xmb_shadows_enable   = false;
    video_info->menu_shader_pipeline = 0;
@@ -726,20 +860,21 @@ static bool gl1_gfx_frame(void *data, const void *frame,
 
       if (osd_params)
       {
-         font_driver_render_msg(video_info, NULL, video_info->stat_text,
-               (const struct font_params*)&video_info->osd_stat_params);
+         font_driver_render_msg(gl1, video_info, video_info->stat_text,
+               (const struct font_params*)&video_info->osd_stat_params, NULL);
 #if 0
          osd_params->y               = 0.350f;
          osd_params->scale           = 0.75f;
-         font_driver_render_msg(video_info, NULL, video_info->chat_text,
-               (const struct font_params*)&video_info->osd_stat_params);
+         font_driver_render_msg(gl1, video_info, video_info->chat_text,
+               (const struct font_params*)&video_info->osd_stat_params, NULL);
 #endif
       }
    }
-
-#ifdef HAVE_MENU_WIDGETS
-   menu_widgets_frame(video_info);
 #endif
+
+#ifdef HAVE_GFX_WIDGETS
+   if (video_info->widgets_inited)
+      gfx_widgets_frame(video_info);
 #endif
 
 #ifdef HAVE_OVERLAY
@@ -748,7 +883,7 @@ static bool gl1_gfx_frame(void *data, const void *frame,
 #endif
 
    if (msg)
-      font_driver_render_msg(video_info, NULL, msg, NULL);
+      font_driver_render_msg(gl1, video_info, msg, NULL, NULL);
 
    video_info->cb_update_window_title(
          video_info->context_data, video_info);
@@ -784,17 +919,18 @@ static bool gl1_gfx_frame(void *data, const void *frame,
       glClear(GL_COLOR_BUFFER_BIT);
       glFinish();
    }
-
+ 
    gl1_context_bind_hw_render(gl1, true);
 
    return true;
 }
 
-static void gl1_gfx_set_nonblock_state(void *data, bool state)
+static void gl1_gfx_set_nonblock_state(void *data, bool state,
+      bool adaptive_vsync_enabled,
+      unsigned swap_interval)
 {
    int interval                = 0;
    gl1_t             *gl1      = (gl1_t*)data;
-   settings_t        *settings = config_get_ptr();
 
    if (!gl1)
       return;
@@ -804,9 +940,14 @@ static void gl1_gfx_set_nonblock_state(void *data, bool state)
    gl1_context_bind_hw_render(gl1, false);
 
    if (!state)
-      interval = settings->uints.video_swap_interval;
+      interval = swap_interval;
 
-   video_context_driver_swap_interval(&interval);
+   if (gl1->ctx_driver->swap_interval)
+   {
+      if (adaptive_vsync_enabled && interval == 1)
+         interval = -1;
+      gl1->ctx_driver->swap_interval(gl1->ctx_data, interval);
+   }
    gl1_context_bind_hw_render(gl1, true);
 }
 
@@ -832,7 +973,7 @@ static bool gl1_gfx_alive(void *data)
    ret = !quit;
 
    if (temp_width != 0 && temp_height != 0)
-      video_driver_set_size(&temp_width, &temp_height);
+      video_driver_set_size(temp_width, temp_height);
 
    return ret;
 }
@@ -986,14 +1127,15 @@ static void gl1_set_texture_frame(void *data,
       const void *frame, bool rgb32, unsigned width, unsigned height,
       float alpha)
 {
-   settings_t *settings = config_get_ptr();
-   unsigned pitch = width * 2;
-   gl1_t *gl1 = (gl1_t*)data;
+   settings_t *settings    = config_get_ptr();
+   bool menu_linear_filter = settings->bools.menu_linear_filter;
+   unsigned       pitch    = width * 2;
+   gl1_t              *gl1 = (gl1_t*)data;
 
    if (!gl1)
       return;
 
-   gl1->menu_smooth = settings->bools.menu_linear_filter;
+   gl1->menu_smooth        = menu_linear_filter;
 
    gl1_context_bind_hw_render(gl1, false);
 
@@ -1032,15 +1174,6 @@ static void gl1_set_texture_frame(void *data,
    }
 
    gl1_context_bind_hw_render(gl1, true);
-}
-
-static void gl1_set_osd_msg(void *data,
-      video_frame_info_t *video_info,
-      const char *msg,
-      const void *params, void *font)
-{
-   font_driver_render_msg(video_info, font,
-         msg, (const struct font_params *)params);
 }
 
 static void gl1_get_video_output_size(void *data,
@@ -1119,7 +1252,10 @@ static void gl1_load_texture_data(
 
    gl1_bind_texture(id, wrap, mag_filter, min_filter);
 
+#ifndef VITA
    glPixelStorei(GL_UNPACK_ALIGNMENT, alignment);
+#endif
+
    glTexImage2D(GL_TEXTURE_2D,
          0,
          (use_rgba || !rgb32) ? GL_RGBA : RARCH_GL1_INTERNAL_FORMAT32,
@@ -1131,14 +1267,28 @@ static void gl1_load_texture_data(
 static void video_texture_load_gl1(
       struct texture_image *ti,
       enum texture_filter_type filter_type,
-      uintptr_t *id)
+      uintptr_t *idptr)
 {
+   GLuint id;
+   unsigned width     = 0;
+   unsigned height    = 0;
+   const void *pixels = NULL;
+
    /* Generate the OpenGL texture object */
-   glGenTextures(1, (GLuint*)id);
-   gl1_load_texture_data((GLuint)*id,
+   glGenTextures(1, &id);
+   *idptr = id;
+
+   if (ti)
+   {
+      width  = ti->width;
+      height = ti->height;
+      pixels = ti->pixels;
+   }
+
+   gl1_load_texture_data(id,
          RARCH_WRAP_EDGE, filter_type,
          4 /* TODO/FIXME - dehardcode */,
-         ti->width, ti->height, ti->pixels,
+         width, height, pixels,
          sizeof(uint32_t) /* TODO/FIXME - dehardcode */
          );
 }
@@ -1177,31 +1327,10 @@ static void gl1_set_aspect_ratio(void *data, unsigned aspect_ratio_idx)
 {
    gl1_t *gl1         = (gl1_t*)data;
 
-   switch (aspect_ratio_idx)
-   {
-      case ASPECT_RATIO_SQUARE:
-         video_driver_set_viewport_square_pixel();
-         break;
-
-      case ASPECT_RATIO_CORE:
-         video_driver_set_viewport_core();
-         break;
-
-      case ASPECT_RATIO_CONFIG:
-         video_driver_set_viewport_config();
-         break;
-
-      default:
-         break;
-   }
-
-   video_driver_set_aspect_ratio_value(
-         aspectratio_lut[aspect_ratio_idx].value);
-
    if (!gl1)
       return;
 
-   gl1->keep_aspect = true;
+   gl1->keep_aspect   = true;
    gl1->should_resize = true;
 }
 
@@ -1261,7 +1390,7 @@ static const video_poke_interface_t gl1_poke_interface = {
    NULL,
    gl1_set_texture_frame,
    gl1_set_texture_enable,
-   gl1_set_osd_msg,
+   font_driver_render_msg,
    NULL,
    NULL,                         /* grab_mouse_toggle */
    NULL,                         /* get_current_shader */
@@ -1276,8 +1405,8 @@ static void gl1_gfx_get_poke_interface(void *data,
    *iface = &gl1_poke_interface;
 }
 
-#if defined(HAVE_MENU) && defined(HAVE_MENU_WIDGETS)
-static bool gl1_menu_widgets_enabled(void *data)
+#ifdef HAVE_GFX_WIDGETS
+static bool gl1_gfx_widgets_enabled(void *data)
 {
    (void)data;
    return true;
@@ -1372,8 +1501,8 @@ static void gl1_overlay_enable(void *data, bool state)
 
    gl->overlay_enable = state;
 
-   if (gl->fullscreen)
-      video_context_driver_show_mouse(&state);
+   if (gl->fullscreen && gl->ctx_driver->show_mouse)
+      gl->ctx_driver->show_mouse(gl->ctx_data, state);
 }
 
 static void gl1_overlay_full_screen(void *data, bool enable)
@@ -1415,114 +1544,6 @@ static void gl1_get_overlay_interface(void *data,
    *iface = &gl1_overlay_interface;
 }
 
-static void gl1_free_overlay(gl1_t *gl)
-{
-   glDeleteTextures(gl->overlays, gl->overlay_tex);
-
-   free(gl->overlay_tex);
-   free(gl->overlay_vertex_coord);
-   free(gl->overlay_tex_coord);
-   free(gl->overlay_color_coord);
-   gl->overlay_tex          = NULL;
-   gl->overlay_vertex_coord = NULL;
-   gl->overlay_tex_coord    = NULL;
-   gl->overlay_color_coord  = NULL;
-   gl->overlays             = 0;
-}
-
-static void gl1_overlay_vertex_geom(void *data,
-      unsigned image,
-      float x, float y,
-      float w, float h)
-{
-   GLfloat *vertex = NULL;
-   gl1_t *gl        = (gl1_t*)data;
-
-   if (!gl)
-      return;
-
-   if (image > gl->overlays)
-   {
-      RARCH_ERR("[GL]: Invalid overlay id: %u\n", image);
-      return;
-   }
-
-   vertex          = (GLfloat*)&gl->overlay_vertex_coord[image * 8];
-
-   /* Flipped, so we preserve top-down semantics. */
-   y               = 1.0f - y;
-   h               = -h;
-
-   vertex[0]       = x;
-   vertex[1]       = y;
-   vertex[2]       = x + w;
-   vertex[3]       = y;
-   vertex[4]       = x;
-   vertex[5]       = y + h;
-   vertex[6]       = x + w;
-   vertex[7]       = y + h;
-}
-
-static void gl1_overlay_tex_geom(void *data,
-      unsigned image,
-      GLfloat x, GLfloat y,
-      GLfloat w, GLfloat h)
-{
-   GLfloat *tex = NULL;
-   gl1_t *gl     = (gl1_t*)data;
-
-   if (!gl)
-      return;
-
-   tex          = (GLfloat*)&gl->overlay_tex_coord[image * 8];
-
-   tex[0]       = x;
-   tex[1]       = y;
-   tex[2]       = x + w;
-   tex[3]       = y;
-   tex[4]       = x;
-   tex[5]       = y + h;
-   tex[6]       = x + w;
-   tex[7]       = y + h;
-}
-
-static void gl1_render_overlay(gl1_t *gl, video_frame_info_t *video_info)
-{
-   unsigned i;
-   unsigned width                      = video_info->width;
-   unsigned height                     = video_info->height;
-
-   glEnable(GL_BLEND);
-
-   if (gl->overlay_full_screen)
-      glViewport(0, 0, width, height);
-
-   gl->coords.vertex    = gl->overlay_vertex_coord;
-   gl->coords.tex_coord = gl->overlay_tex_coord;
-   gl->coords.color     = gl->overlay_color_coord;
-   gl->coords.vertices  = 4 * gl->overlays;
-
-   /*gl->shader->set_coords(gl->shader_data, &gl->coords);
-   gl->shader->set_mvp(gl->shader_data, &gl->mvp_no_rot);*/
-
-   glMatrixMode(GL_PROJECTION);
-   glPushMatrix();
-   glLoadIdentity();
-
-   for (i = 0; i < gl->overlays; i++)
-   {
-      glBindTexture(GL_TEXTURE_2D, gl->overlay_tex[i]);
-      glDrawArrays(GL_TRIANGLE_STRIP, 4 * i, 4);
-   }
-
-   glDisable(GL_BLEND);
-   gl->coords.vertex    = gl->vertex_ptr;
-   gl->coords.tex_coord = gl->tex_info.coord;
-   gl->coords.color     = gl->white_color_ptr;
-   gl->coords.vertices  = 4;
-   if (gl->overlay_full_screen)
-      glViewport(gl->vp.x, gl->vp.y, gl->vp.width, gl->vp.height);
-}
 #endif
 
 video_driver_t video_gl1 = {
@@ -1550,7 +1571,7 @@ video_driver_t video_gl1 = {
 #endif
   gl1_gfx_get_poke_interface,
   gl1_wrap_type_to_enum,
-#if defined(HAVE_MENU) && defined(HAVE_MENU_WIDGETS)
-  gl1_menu_widgets_enabled
+#ifdef HAVE_GFX_WIDGETS
+  gl1_gfx_widgets_enabled
 #endif
 };

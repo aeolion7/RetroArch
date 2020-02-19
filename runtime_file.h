@@ -57,12 +57,41 @@ typedef struct
    char path[PATH_MAX_LENGTH];
 } runtime_log_t;
 
+enum playlist_sublabel_last_played_style_type
+{
+   PLAYLIST_LAST_PLAYED_STYLE_YMD_HMS = 0,
+   PLAYLIST_LAST_PLAYED_STYLE_YMD_HM,
+   PLAYLIST_LAST_PLAYED_STYLE_MDYYYY,
+   PLAYLIST_LAST_PLAYED_STYLE_DM_HM,
+   PLAYLIST_LAST_PLAYED_STYLE_MD_HM,
+   PLAYLIST_LAST_PLAYED_STYLE_YMD_HMS_AM_PM,
+   PLAYLIST_LAST_PLAYED_STYLE_YMD_HM_AM_PM,
+   PLAYLIST_LAST_PLAYED_STYLE_MDYYYY_AM_PM,
+   PLAYLIST_LAST_PLAYED_STYLE_DM_HM_AM_PM,
+   PLAYLIST_LAST_PLAYED_STYLE_MD_HM_AM_PM,
+   PLAYLIST_LAST_PLAYED_STYLE_LAST
+};
+
+enum playlist_sublabel_runtime
+{
+   PLAYLIST_RUNTIME_PER_CORE = 0,
+   PLAYLIST_RUNTIME_AGGREGATE,
+   PLAYLIST_RUNTIME_LAST
+};
+
+
+
 /* Initialisation */
 
 /* Initialise runtime log, loading current parameters
  * if log file exists. Returned object must be free()'d.
  * Returns NULL if content_path and/or core_path are invalid */
-runtime_log_t *runtime_log_init(const char *content_path, const char *core_path, bool log_per_core);
+runtime_log_t *runtime_log_init(
+      const char *content_path,
+      const char *core_path,
+      const char *dir_runtime_log,
+      const char *dir_playlist,
+      bool log_per_core);
 
 /* Setters */
 
@@ -100,14 +129,21 @@ void runtime_log_get_runtime_hms(runtime_log_t *runtime_log, unsigned *hours, un
 /* Gets runtime in microseconds */
 void runtime_log_get_runtime_usec(runtime_log_t *runtime_log, retro_time_t *usec);
 
+/* Gets runtime as a pre-formatted string */
+void runtime_log_get_runtime_str(runtime_log_t *runtime_log, char *str, size_t len);
+
 /* Gets last played entry values */
 void runtime_log_get_last_played(runtime_log_t *runtime_log,
       unsigned *year, unsigned *month, unsigned *day,
       unsigned *hour, unsigned *minute, unsigned *second);
 
-/* Gets last played entry values as a time_t 'object'
+/* Gets last played entry values as a struct tm 'object'
  * (e.g. for printing with strftime()) */
-void runtime_log_get_last_played_time(runtime_log_t *runtime_log, time_t *time);
+void runtime_log_get_last_played_time(runtime_log_t *runtime_log, struct tm *time_info);
+
+/* Gets last played entry value as a pre-formatted string */
+void runtime_log_get_last_played_str(runtime_log_t *runtime_log,
+      char *str, size_t len, enum playlist_sublabel_last_played_style_type timedate_style);
 
 /* Status */
 

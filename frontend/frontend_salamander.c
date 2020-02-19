@@ -156,7 +156,7 @@ static void salamander_init(char *s, size_t len)
 
    if (!config_exists)
    {
-      config_file_t *conf = (config_file_t*)config_file_new(NULL);
+      config_file_t *conf = config_file_new_alloc();
 
       if (conf)
       {
@@ -192,7 +192,7 @@ int main(int argc, char *argv[])
       frontend_ctx->deinit(args);
 
    if (frontend_ctx && frontend_ctx->exitspawn)
-      frontend_ctx->exitspawn(libretro_path, sizeof(libretro_path));
+      frontend_ctx->exitspawn(libretro_path, sizeof(libretro_path), NULL);
 
    return 1;
 }

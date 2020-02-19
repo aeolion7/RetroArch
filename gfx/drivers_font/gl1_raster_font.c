@@ -43,6 +43,10 @@
 
 #define MAX_MSG_LEN_CHUNK 64
 
+#ifdef VITA
+static float *vertices3 = NULL;
+#endif
+
 typedef struct
 {
    gl1_t *gl;
@@ -67,7 +71,11 @@ static void gl1_raster_font_free_font(void *data,
       font->font_driver->free(font->font_data);
 
    if (is_threaded)
-      video_context_driver_make_current(true);
+      if (
+            font->gl && 
+            font->gl->ctx_driver &&
+            font->gl->ctx_driver->make_current)
+         font->gl->ctx_driver->make_current(true);
 
    glDeleteTextures(1, &font->tex);
 
@@ -75,7 +83,7 @@ static void gl1_raster_font_free_font(void *data,
 }
 
 #if 0
-static bool gl1_raster_font_upload_atlas_components_4(gl1_raster_t *font)
+static bool gl1_raster_font_upload_atlas(gl1_raster_t *font)
 {
    unsigned i, j;
    GLint  gl_internal                   = GL_RGBA;
@@ -176,7 +184,11 @@ static void *gl1_raster_font_init_font(void *data,
    RARCH_LOG("[Font]: Using font driver GL1\n");
 
    if (is_threaded)
-      video_context_driver_make_current(false);
+      if (
+            font->gl && 
+            font->gl->ctx_driver &&
+            font->gl->ctx_driver->make_current)
+         font->gl->ctx_driver->make_current(false);
 
    glGenTextures(1, &font->tex);
 
@@ -255,8 +267,22 @@ static void gl1_raster_font_draw_vertices(gl1_raster_t *font,
    glEnableClientState(GL_VERTEX_ARRAY);
    glEnableClientState(GL_TEXTURE_COORD_ARRAY);
 
-   glColorPointer(4, GL_FLOAT, 0, coords->color);
+#ifdef VITA
+   if (vertices3)
+      free(vertices3);
+   vertices3 = (float*)malloc(sizeof(float) * 3 * coords->vertices);
+   int i;
+   for (i = 0; i < coords->vertices; i++) {
+      memcpy(&vertices3[i*3], &coords->vertex[i*2], sizeof(float) * 2);
+      vertices3[i*3] -= 0.5f;
+      vertices3[i*3+2] = 0.0f;
+   }
+   glVertexPointer(3, GL_FLOAT, 0, vertices3);   
+#else
    glVertexPointer(2, GL_FLOAT, 0, coords->vertex);
+#endif
+
+   glColorPointer(4, GL_FLOAT, 0, coords->color);
    glTexCoordPointer(2, GL_FLOAT, 0, coords->tex_coord);
 
    glDrawArrays(GL_TRIANGLES, 0, coords->vertices);

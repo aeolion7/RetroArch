@@ -37,7 +37,7 @@
 #endif
 
 static int action_select_default(const char *path, const char *label, unsigned type,
-      size_t idx)
+      size_t idx, size_t entry_idx)
 {
    menu_entry_t entry;
    int ret                    = 0;
@@ -103,7 +103,7 @@ static int action_select_default(const char *path, const char *label, unsigned t
    }
 
    if (action != MENU_ACTION_NOOP)
-       ret = menu_entry_action(&entry, (unsigned)idx, action);
+       ret = menu_entry_action(&entry, idx, action);
 
    task_queue_check();
 
@@ -111,101 +111,34 @@ static int action_select_default(const char *path, const char *label, unsigned t
 }
 
 static int action_select_path_use_directory(const char *path,
-      const char *label, unsigned type, size_t idx)
+      const char *label, unsigned type, size_t idx, size_t entry_idx)
 {
    return action_ok_path_use_directory(path, label, type, idx, 0 /* unused */);
 }
 
 static int action_select_core_setting(const char *path, const char *label, unsigned type,
-      size_t idx)
+      size_t idx, size_t entry_idx)
 {
    return action_ok_core_option_dropdown_list(path, label, type, idx, 0);
 }
 
-static int shader_action_parameter_select(const char *path, const char *label, unsigned type,
-      size_t idx)
-{
-   return shader_action_parameter_right(type, label, true);
-}
-
-static int shader_action_parameter_preset_select(const char *path, const char *label, unsigned type,
-      size_t idx)
-{
-   return shader_action_parameter_right(type, label, true);
-}
-
-static int action_select_cheat(const char *path, const char *label, unsigned type,
-      size_t idx)
-{
-   return action_right_cheat(type, label, true);
-}
-
 static int action_select_input_desc(const char *path, const char *label, unsigned type,
-      size_t idx)
+      size_t idx, size_t entry_idx)
 {
    return action_right_input_desc(type, label, true);
 }
 
 static int action_select_input_desc_kbd(const char *path,
       const char *label, unsigned type,
-   size_t idx)
+      size_t idx, size_t entry_idx)
 {
    return action_right_input_desc_kbd(type, label, true);
 }
 
-#ifdef HAVE_NETWORKING
-static int action_select_netplay_connect_room(const char *path,
-      const char *label, unsigned type,
-      size_t idx)
-{
-   char tmp_hostname[4115];
-
-   tmp_hostname[0] = '\0';
-
-   if (netplay_driver_ctl(RARCH_NETPLAY_CTL_IS_DATA_INITED, NULL))
-      command_event(CMD_EVENT_NETPLAY_DEINIT, NULL);
-   netplay_driver_ctl(RARCH_NETPLAY_CTL_ENABLE_CLIENT, NULL);
-
-   if (netplay_room_list[idx - 3].host_method == NETPLAY_HOST_METHOD_MITM)
-      snprintf(tmp_hostname,
-            sizeof(tmp_hostname),
-            "%s|%d",
-            netplay_room_list[idx - 3].mitm_address,
-            netplay_room_list[idx - 3].mitm_port);
-   else
-      snprintf(tmp_hostname,
-            sizeof(tmp_hostname),
-            "%s|%d",
-            netplay_room_list[idx - 3].address,
-            netplay_room_list[idx - 3].port);
-
-   task_push_netplay_crc_scan(netplay_room_list[idx - 3].gamecrc,
-         netplay_room_list[idx - 3].gamename,
-         tmp_hostname, netplay_room_list[idx - 3].corename, netplay_room_list[idx - 3].subsystem_name);
-
-   return 0;
-}
-#endif
-
 static int menu_cbs_init_bind_select_compare_type(
       menu_file_list_cbs_t *cbs, unsigned type)
 {
-   if (type >= MENU_SETTINGS_CHEAT_BEGIN
-         && type <= MENU_SETTINGS_CHEAT_END)
-   {
-      BIND_ACTION_SELECT(cbs, action_select_cheat);
-   }
-   else if (type >= MENU_SETTINGS_SHADER_PARAMETER_0
-         && type <= MENU_SETTINGS_SHADER_PARAMETER_LAST)
-   {
-      BIND_ACTION_SELECT(cbs, shader_action_parameter_select);
-   }
-   else if (type >= MENU_SETTINGS_SHADER_PRESET_PARAMETER_0
-         && type <= MENU_SETTINGS_SHADER_PRESET_PARAMETER_LAST)
-   {
-      BIND_ACTION_SELECT(cbs, shader_action_parameter_preset_select);
-   }
-   else if (type >= MENU_SETTINGS_INPUT_DESC_BEGIN
+   if (type >= MENU_SETTINGS_INPUT_DESC_BEGIN
          && type <= MENU_SETTINGS_INPUT_DESC_END)
    {
       BIND_ACTION_SELECT(cbs, action_select_input_desc);
@@ -245,15 +178,8 @@ int menu_cbs_init_bind_select(menu_file_list_cbs_t *cbs,
 
    BIND_ACTION_SELECT(cbs, action_select_default);
 
-#ifdef HAVE_NETWORKING
-   if (cbs->enum_idx == MENU_ENUM_LABEL_CONNECT_NETPLAY_ROOM)
-   {
-      BIND_ACTION_SELECT(cbs, action_select_netplay_connect_room);
-      return 0;
-   }
-#endif
-
-   if ((type >= MENU_SETTINGS_CORE_OPTION_START))
+   if ((type >= MENU_SETTINGS_CORE_OPTION_START) &&
+       (type < MENU_SETTINGS_CHEEVOS_START))
    {
       BIND_ACTION_SELECT(cbs, action_select_core_setting);
       return 0;

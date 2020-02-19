@@ -135,16 +135,10 @@ static void *gfx_ctx_qnx_init(video_frame_info_t *video_info, void *video_driver
 #ifdef HAVE_EGL
    if (!egl_init_context(&qnx->egl, EGL_NONE, EGL_DEFAULT_DISPLAY, &major, &minor,
             &n, attribs, NULL))
-   {
-      egl_report_error();
       goto error;
-   }
 
    if (!egl_create_context(&qnx->egl, context_attributes))
-   {
-      egl_report_error();
       goto error;
-   }
 #endif
 
    if(!screen_win)
@@ -266,7 +260,7 @@ static void *gfx_ctx_qnx_init(video_frame_info_t *video_info, void *video_driver
    return qnx;
 
 error:
-   RARCH_ERR("EGL error: %d.\n", eglGetError());
+   egl_report_error();
    gfx_ctx_qnx_destroy(video_driver);
 screen_error:
    screen_stop_events(screen_ctx);
@@ -322,7 +316,7 @@ static bool gfx_ctx_qnx_set_video_mode(void *data,
 
 static void gfx_ctx_qnx_input_driver(void *data,
       const char *joypad_name,
-      const input_driver_t **input, void **input_data)
+      input_driver_t **input, void **input_data)
 {
    void *qnxinput       = input_qnx.init(joypad_name);
 
@@ -482,7 +476,7 @@ const gfx_ctx_driver_t gfx_ctx_qnx = {
    NULL, /* set_resize */
    gfx_ctx_qnx_has_focus,
    gfx_ctx_qnx_suppress_screensaver,
-   NULL, /* has_windowed */
+   false, /* has_windowed */
    gfx_ctx_qnx_swap_buffers,
    gfx_ctx_qnx_input_driver,
    gfx_ctx_qnx_get_proc_address,

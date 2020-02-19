@@ -24,7 +24,7 @@ endif
 
 STRIP			= $(CELL_SDK)/host-win32/ppu/bin/ppu-lv2-strip.exe
 
-INCFLAGS    = -I. -Idefines -Ilibretro-common/include -Ideps/libz
+INCFLAGS    = -I. -Idefines -Ilibretro-common/include -Ilibretro-common/include/compat/zlib
 DEFINES     = -D__CELLOS_LV2__ -DIS_SALAMANDER -DRARCH_CONSOLE -DHAVE_SYSUTILS -DHAVE_SYSMODULES -DHAVE_RARCH_EXEC
 
 ifeq ($(DEX_BUILD), 1)
@@ -45,8 +45,8 @@ PPU_CXXFLAGS := $(PPU_OPTIMIZE_LV) $(INCFLAGS) $(DEFINES)
 PPU_SRCS		= frontend/frontend_salamander.c \
 				  frontend/frontend_driver.c \
 				  frontend/drivers/platform_ps3.c \
-				  frontend/drivers/platform_null.c \
 				  libretro-common/file/file_path.c \
+				  libretro-common/file/file_path_io.c \
 				  libretro-common/lists/dir_list.c \
 				  libretro-common/lists/string_list.c \
 				  libretro-common/file/retro_dirent.c \

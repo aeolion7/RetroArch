@@ -43,8 +43,8 @@
 #define IMG_EXT "bmp"
 #endif
 
-#if defined(HAVE_MENU) && defined(HAVE_MENU_WIDGETS)
-#include "../../menu/widgets/menu_widgets.h"
+#if defined(HAVE_GFX_WIDGETS)
+#include "../gfx/gfx_widgets.h"
 #endif
 
 #include "../defaults.h"
@@ -66,6 +66,8 @@ struct screenshot_task_state
    bool is_idle;
    bool is_paused;
    bool history_list_enable;
+   bool pl_fuzzy_archive_match;
+   bool pl_use_old_format;
    int pitch;
    unsigned width;
    unsigned height;
@@ -75,6 +77,7 @@ struct screenshot_task_state
    char filename[PATH_MAX_LENGTH];
    char shotname[256];
    void *userbuf;
+   bool widgets_ready;
    struct scaler_ctx scaler;
 };
 
@@ -151,11 +154,11 @@ static void task_screenshot_handler(retro_task_t *task)
       if (state->userbuf)
          free(state->userbuf);
 
-#ifdef HAVE_MENU_WIDGETS
+#if defined(HAVE_GFX_WIDGETS)
       /* If menu widgets are enabled, state is freed
          in the callback after the notification
          is displayed */
-      if (!menu_widgets_ready())
+      if (!state->widgets_ready)
 #endif
          free(state);
       return;
@@ -176,7 +179,9 @@ static void task_screenshot_handler(retro_task_t *task)
       entry.core_path             = (char*)"builtin";
       entry.core_name             = (char*)"imageviewer";
 
-      command_playlist_push_write(g_defaults.image_history, &entry);
+      command_playlist_push_write(g_defaults.image_history, &entry,
+            state->pl_fuzzy_archive_match,
+            state->pl_use_old_format);
    }
 #endif
 
@@ -193,18 +198,18 @@ static void task_screenshot_handler(retro_task_t *task)
       task_free_title(task);
 }
 
-#ifdef HAVE_MENU_WIDGETS
+#if defined(HAVE_GFX_WIDGETS)
 static void task_screenshot_callback(retro_task_t *task,
       void *task_data,
       void *user_data, const char *error)
 {
    screenshot_task_state_t *state = (screenshot_task_state_t*)task->state;
 
-   if (!menu_widgets_ready())
+   if (!state->widgets_ready)
       return;
 
-   if (state && !state->silence)
-      menu_widgets_screenshot_taken(state->shotname, state->filename);
+   if (state && !state->silence && state->widgets_ready)
+      gfx_widgets_screenshot_taken(state->shotname, state->filename);
 
    free(state);
 }
@@ -239,23 +244,33 @@ static bool screenshot_dump(
    if (fullpath)
       strlcpy(state->filename, name_base, sizeof(state->filename));
 
-   state->is_idle             = is_idle;
-   state->is_paused           = is_paused;
-   state->bgr24               = bgr24;
-   state->height              = height;
-   state->width               = width;
-   state->pitch               = pitch;
-   state->frame               = frame;
-   state->userbuf             = userbuf;
-   state->silence             = savestate;
-   state->history_list_enable = settings->bools.history_list_enable;
-   state->pixel_format_type   = pixel_format_type;
+   state->pl_fuzzy_archive_match = settings->bools.playlist_fuzzy_archive_match;
+   state->pl_use_old_format      = settings->bools.playlist_use_old_format;
+   state->is_idle                = is_idle;
+   state->is_paused              = is_paused;
+   state->bgr24                  = bgr24;
+   state->height                 = height;
+   state->width                  = width;
+   state->pitch                  = pitch;
+   state->frame                  = frame;
+   state->userbuf                = userbuf;
+#if defined(HAVE_GFX_WIDGETS)
+   state->widgets_ready          = gfx_widgets_ready();
+#else
+   state->widgets_ready          = false;
+#endif
+   state->silence                = savestate;
+   state->history_list_enable    = settings->bools.history_list_enable;
+   state->pixel_format_type      = pixel_format_type;
 
    if (!fullpath)
    {
       if (savestate)
-         snprintf(state->filename,
-               sizeof(state->filename), "%s.png", name_base);
+      {
+         strlcpy(state->filename,
+               name_base, sizeof(state->filename));
+         strlcat(state->filename, ".png", sizeof(state->filename));
+      }
       else
       {
          if (settings->bools.auto_screenshot_filename)
@@ -279,8 +294,11 @@ static bool screenshot_dump(
                   IMG_EXT, sizeof(state->shotname));
          }
          else
-            snprintf(state->shotname, sizeof(state->shotname),
-                  "%s.png", path_basename(name_base));
+         {
+            strlcpy(state->shotname, path_basename(name_base),
+                  sizeof(state->shotname));
+            strlcat(state->shotname, ".png", sizeof(state->shotname));
+         }
 
          if (  string_is_empty(screenshot_dir) || 
                settings->bools.screenshots_in_content_dir)
@@ -315,11 +333,9 @@ static bool screenshot_dump(
       task->type        = TASK_TYPE_BLOCKING;
       task->state       = state;
       task->handler     = task_screenshot_handler;
-#ifdef HAVE_MENU_WIDGETS
+#if defined(HAVE_GFX_WIDGETS)
       task->callback    = task_screenshot_callback;
-#endif
-#if defined(HAVE_MENU) && defined(HAVE_MENU_WIDGETS)
-      if (menu_widgets_ready() && !savestate)
+      if (state->widgets_ready && !savestate)
          task_free_title(task);
       else
 #endif
@@ -388,7 +404,8 @@ static bool take_screenshot_viewport(
    if (!screenshot_dump(screenshot_dir,
             name_base,
             buffer, vp.width, vp.height,
-            vp.width * 3, true, buffer, savestate, is_idle, is_paused, fullpath, use_thread,
+            vp.width * 3, true, buffer,
+            savestate, is_idle, is_paused, fullpath, use_thread,
             pixel_format_type))
    {
       free(buffer);

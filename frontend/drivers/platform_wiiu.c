@@ -69,6 +69,29 @@
 static enum frontend_fork wiiu_fork_mode = FRONTEND_FORK_NONE;
 static const char *elf_path_cst = WIIU_SD_PATH "retroarch/retroarch.elf";
 
+static bool exists(char *path)
+{
+   struct stat stat_buf = {0};
+
+   if (!path)
+      return false;
+
+   return (stat(path, &stat_buf) == 0);
+}
+
+static void fix_asset_directory(void) {
+   char src_path_buf[PATH_MAX_LENGTH] = {0};
+   char dst_path_buf[PATH_MAX_LENGTH] = {0};
+
+   fill_pathname_join(src_path_buf, g_defaults.dirs[DEFAULT_DIR_PORT], "media", sizeof(g_defaults.dirs[DEFAULT_DIR_PORT]));
+   fill_pathname_join(dst_path_buf, g_defaults.dirs[DEFAULT_DIR_PORT], "assets", sizeof(g_defaults.dirs[DEFAULT_DIR_PORT]));
+
+   if (exists(dst_path_buf) || !exists(src_path_buf))
+      return;
+
+   rename(src_path_buf, dst_path_buf);
+}
+
 static void frontend_wiiu_get_environment_settings(int *argc, char *argv[],
       void *args, void *params_data)
 {
@@ -79,8 +102,9 @@ static void frontend_wiiu_get_environment_settings(int *argc, char *argv[],
 
    fill_pathname_join(g_defaults.dirs[DEFAULT_DIR_CORE_ASSETS], g_defaults.dirs[DEFAULT_DIR_PORT],
          "downloads", sizeof(g_defaults.dirs[DEFAULT_DIR_CORE_ASSETS]));
+   fix_asset_directory();
    fill_pathname_join(g_defaults.dirs[DEFAULT_DIR_ASSETS], g_defaults.dirs[DEFAULT_DIR_PORT],
-         "media", sizeof(g_defaults.dirs[DEFAULT_DIR_ASSETS]));
+         "assets", sizeof(g_defaults.dirs[DEFAULT_DIR_ASSETS]));
    fill_pathname_join(g_defaults.dirs[DEFAULT_DIR_CORE], g_defaults.dirs[DEFAULT_DIR_PORT],
          "cores", sizeof(g_defaults.dirs[DEFAULT_DIR_CORE]));
    fill_pathname_join(g_defaults.dirs[DEFAULT_DIR_CORE_INFO], g_defaults.dirs[DEFAULT_DIR_CORE],
@@ -150,7 +174,7 @@ static int frontend_wiiu_parse_drive_list(void *data, bool load_content)
    file_list_t *list = (file_list_t *)data;
    enum msg_hash_enums enum_idx = load_content ?
       MENU_ENUM_LABEL_FILE_DETECT_CORE_LIST_PUSH_DIR :
-      MSG_UNKNOWN;
+      MENU_ENUM_LABEL_FILE_BROWSER_DIRECTORY;
 
    if (!list)
       return -1;
@@ -168,7 +192,7 @@ static int frontend_wiiu_parse_drive_list(void *data, bool load_content)
    return 0;
 }
 
-static void frontend_wiiu_exec(const char *path, bool should_load_game)
+static void frontend_wiiu_exec(const char *path, bool should_load_content)
 {
 
    struct
@@ -181,7 +205,7 @@ static void frontend_wiiu_exec(const char *path, bool should_load_game)
    int len     = 0;
    param->argc = 0;
 
-   if(!path || !*path)
+   if (!path || !*path)
    {
       RARCH_LOG("No executable path provided, cannot Restart\n");
    }
@@ -195,7 +219,7 @@ static void frontend_wiiu_exec(const char *path, bool should_load_game)
 
    RARCH_LOG("Attempt to load core: [%s].\n", path);
 #ifndef IS_SALAMANDER
-   if (should_load_game && !path_is_empty(RARCH_PATH_CONTENT))
+   if (should_load_content && !path_is_empty(RARCH_PATH_CONTENT))
    {
       strcpy(param->args + len, path_get(RARCH_PATH_CONTENT));
       param->argv[param->argc] = param->args + len;
@@ -249,9 +273,9 @@ static bool frontend_wiiu_set_fork(enum frontend_fork fork_mode)
 }
 #endif
 
-static void frontend_wiiu_exitspawn(char *s, size_t len)
+static void frontend_wiiu_exitspawn(char *s, size_t len, char *args)
 {
-   bool should_load_game = false;
+   bool should_load_content = false;
 #ifndef IS_SALAMANDER
    if (wiiu_fork_mode == FRONTEND_FORK_NONE)
       return;
@@ -259,13 +283,13 @@ static void frontend_wiiu_exitspawn(char *s, size_t len)
    switch (wiiu_fork_mode)
    {
       case FRONTEND_FORK_CORE_WITH_ARGS:
-         should_load_game = true;
+         should_load_content = true;
          break;
       default:
          break;
    }
 #endif
-   frontend_wiiu_exec(s, should_load_game);
+   frontend_wiiu_exec(s, should_load_content);
 }
 
 frontend_ctx_driver_t frontend_ctx_wiiu =
@@ -302,6 +326,8 @@ frontend_ctx_driver_t frontend_ctx_wiiu =
    NULL,                         /* set_sustained_performance_mode */
    NULL,                         /* get_cpu_model_name */
    NULL,                         /* get_user_language */
+   NULL,                         /* is_narrator_running */
+   NULL,                         /* accessibility_speak */
    "wiiu",
    NULL,                         /* get_video_driver */
 };
@@ -366,7 +392,7 @@ int main(int argc, char **argv)
 static void get_arguments(int *argc, char ***argv)
 {
    DEBUG_VAR(ARGV_PTR);
-   if(ARGV_PTR && ((u32)ARGV_PTR < 0x01000000))
+   if (ARGV_PTR && ((u32)ARGV_PTR < 0x01000000))
    {
       struct
       {
@@ -374,7 +400,8 @@ static void get_arguments(int *argc, char ***argv)
          u32 argc;
          char *argv[3];
       } *param = ARGV_PTR;
-      if(param->magic == ARGV_MAGIC)
+
+      if (param->magic == ARGV_MAGIC)
       {
         *argc = param->argc;
         *argv = param->argv;
@@ -409,13 +436,12 @@ static void main_teardown(void)
 
 static void main_loop(void)
 {
-   unsigned sleep_ms = 0;
    OSTime start_time;
    int status;
 
-   do
+   for (;;)
    {
-      if(video_driver_get_ptr(false))
+      if (video_driver_get_ptr(false))
       {
          start_time = OSGetSystemTime();
          task_queue_wait(swap_is_pending, &start_time);
@@ -423,14 +449,11 @@ static void main_loop(void)
       else
          task_queue_wait(NULL, NULL);
 
-      status = runloop_iterate(&sleep_ms);
+      status = runloop_iterate();
 
-      if(status == 1 && sleep_ms > 0)
-         usleep(sleep_ms);
-
-      if(status == -1)
+      if (status == -1)
          break;
-   } while(true);
+   }
 }
 
 static void SaveCallback(void)
@@ -469,14 +492,14 @@ int getBroadcastAddress(ACIpAddress *broadcast)
    ACIpAddress myIp, mySubnet;
    ACResult result;
 
-   if(broadcast == NULL)
+   if (!broadcast)
       return -1;
 
    result = ACGetAssignedAddress(&myIp);
-   if(result < 0)
+   if (result < 0)
       return -1;
    result = ACGetAssignedSubnet(&mySubnet);
-   if(result < 0)
+   if (result < 0)
       return -1;
 
    *broadcast = myIp | (~mySubnet);
@@ -501,7 +524,7 @@ static void deinit_logging(void)
 static int broadcast_init(int port)
 {
    ACIpAddress broadcast_ip;
-   if(getBroadcastAddress(&broadcast_ip) < 0)
+   if (getBroadcastAddress(&broadcast_ip) < 0)
       return -1;
 
    memset(&broadcast, 0, sizeof(broadcast));
@@ -516,15 +539,15 @@ static void wiiu_log_init(int port)
 {
    wiiu_log_lock = 0;
 
-   if(wiiu_log_socket >= 0)
+   if (wiiu_log_socket >= 0)
       return;
 
-   if(broadcast_init(port) < 0)
+   if (broadcast_init(port) < 0)
       return;
 
    wiiu_log_socket = socket(AF_INET, SOCK_DGRAM, 0);
 
-   if(wiiu_log_socket < 0)
+   if (wiiu_log_socket < 0)
       return;
 
    struct sockaddr_in connect_addr;
@@ -533,7 +556,7 @@ static void wiiu_log_init(int port)
    connect_addr.sin_port = 0;
    connect_addr.sin_addr.s_addr = htonl(INADDR_ANY);
 
-   if( bind(wiiu_log_socket, (struct sockaddr *)&connect_addr, sizeof(connect_addr)) < 0)
+   if ( bind(wiiu_log_socket, (struct sockaddr *)&connect_addr, sizeof(connect_addr)) < 0)
    {
       socketclose(wiiu_log_socket);
       wiiu_log_socket = -1;
@@ -543,7 +566,7 @@ static void wiiu_log_init(int port)
 
 static void wiiu_log_deinit(void)
 {
-   if(wiiu_log_socket >= 0)
+   if (wiiu_log_socket >= 0)
    {
       socketclose(wiiu_log_socket);
       wiiu_log_socket = -1;
@@ -585,7 +608,7 @@ void net_print_exp(const char *str)
 
 static ssize_t wiiu_log_write(struct _reent *r, void *fd, const char *ptr, size_t len)
 {
-   if( wiiu_log_socket < 0)
+   if (wiiu_log_socket < 0)
       return len;
 
    while(wiiu_log_lock)
@@ -601,7 +624,7 @@ static ssize_t wiiu_log_write(struct _reent *r, void *fd, const char *ptr, size_
       int block = remaining < DGRAM_SIZE ? remaining : DGRAM_SIZE;
       sent = sendto(wiiu_log_socket, ptr, block, 0, (struct sockaddr *)&broadcast, sizeof(broadcast));
 
-      if(sent < 0)
+      if (sent < 0)
          break;
 
       remaining -= sent;

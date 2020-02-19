@@ -36,9 +36,9 @@
 
 #ifdef HAVE_MENU
 #include "../../menu/menu_driver.h"
-#ifdef HAVE_MENU_WIDGETS
-#include "../../menu/widgets/menu_widgets.h"
 #endif
+#ifdef HAVE_GFX_WIDGETS
+#include "../gfx_widgets.h"
 #endif
 
 #include "../font_driver.h"
@@ -85,10 +85,10 @@ static void vulkan_init_render_pass(
 {
    VkRenderPassCreateInfo rp_info = {
       VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO };
-   VkAttachmentDescription attachment = {0};
-   VkSubpassDescription subpass       = {0};
    VkAttachmentReference color_ref    = { 0,
       VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL };
+   VkAttachmentDescription attachment = {0};
+   VkSubpassDescription subpass       = {0};
 
    /* Backbuffer format. */
    attachment.format            = vk->context->swapchain_format;
@@ -660,9 +660,10 @@ static void vulkan_init_textures(vk_t *vk)
                vk->tex_w, vk->tex_h, vk->tex_fmt,
                NULL, NULL, VULKAN_TEXTURE_STREAMED);
 
-         vulkan_map_persistent_texture(
-               vk->context->device,
-               &vk->swapchain[i].texture);
+         {
+            struct vk_texture *texture = &vk->swapchain[i].texture;
+            VK_MAP_PERSISTENT_TEXTURE(vk->context->device, texture);
+         }
 
          if (vk->swapchain[i].texture.type == VULKAN_TEXTURE_STAGING)
             vk->swapchain[i].texture_optimal = vulkan_create_texture(vk, NULL,
@@ -1117,8 +1118,9 @@ static void vulkan_init_readback(vk_t *vk)
     * not initialized yet.
     */
    settings_t *settings    = config_get_ptr();
-   bool recording_enabled = recording_is_enabled();
-   vk->readback.streamed   = settings->bools.video_gpu_record && recording_enabled;
+   bool recording_enabled  = recording_is_enabled();
+   bool video_gpu_record   = settings->bools.video_gpu_record;
+   vk->readback.streamed   = video_gpu_record && recording_enabled;
 
    if (!vk->readback.streamed)
       return;
@@ -1153,7 +1155,7 @@ static void vulkan_init_readback(vk_t *vk)
 }
 
 static void *vulkan_init(const video_info_t *video,
-      const input_driver_t **input,
+      input_driver_t **input,
       void **input_data)
 {
    gfx_ctx_mode_t mode;
@@ -1179,6 +1181,8 @@ static void *vulkan_init(const video_info_t *video,
    vk->ctx_driver                     = ctx_driver;
 
    video_context_driver_set((const gfx_ctx_driver_t*)ctx_driver);
+   
+   RARCH_LOG("[Vulkan]: Found vulkan context: %s\n", ctx_driver->ident);
 
    video_context_driver_get_video_size(&mode);
    full_x                             = mode.width;
@@ -1188,7 +1192,15 @@ static void *vulkan_init(const video_info_t *video,
 
    RARCH_LOG("[Vulkan]: Detecting screen resolution %ux%u.\n", full_x, full_y);
    interval = video->vsync ? video->swap_interval : 0;
-   video_context_driver_swap_interval(&interval);
+
+   if (ctx_driver->swap_interval)
+   {
+      bool adaptive_vsync_enabled            = video_driver_test_all_flags(
+            GFX_CTX_FLAGS_ADAPTIVE_VSYNC) && video->adaptive_vsync;
+      if (adaptive_vsync_enabled && interval == 1)
+         interval = -1;
+      ctx_driver->swap_interval(vk->ctx_data, interval);
+   }
 
    win_width  = video->width;
    win_height = video->height;
@@ -1214,8 +1226,10 @@ static void *vulkan_init(const video_info_t *video,
    temp_height = mode.height;
 
    if (temp_width != 0 && temp_height != 0)
-      video_driver_set_size(&temp_width, &temp_height);
+      video_driver_set_size(temp_width, temp_height);
    video_driver_get_size(&temp_width, &temp_height);
+   vk->video_width       = temp_width;
+   vk->video_height      = temp_height;
 
    RARCH_LOG("[Vulkan]: Using resolution %ux%u\n", temp_width, temp_height);
 
@@ -1249,7 +1263,9 @@ static void *vulkan_init(const video_info_t *video,
    video_context_driver_input_driver(&inp);
 
    if (video->font_enable)
-      font_driver_init_osd(vk, false,
+      font_driver_init_osd(vk,
+            video,
+            false,
             video->is_threaded,
             FONT_DRIVER_RENDER_VULKAN_API);
 
@@ -1294,11 +1310,12 @@ static void vulkan_check_swapchain(vk_t *vk)
    }
 }
 
-static void vulkan_set_nonblock_state(void *data, bool state)
+static void vulkan_set_nonblock_state(void *data, bool state,
+      bool adaptive_vsync_enabled,
+      unsigned swap_interval)
 {
-   int interval         = 0;
-   vk_t *vk             = (vk_t*)data;
-   settings_t *settings = config_get_ptr();
+   int interval                = 0;
+   vk_t *vk                    = (vk_t*)data;
 
    if (!vk)
       return;
@@ -1306,26 +1323,29 @@ static void vulkan_set_nonblock_state(void *data, bool state)
    RARCH_LOG("[Vulkan]: VSync => %s\n", state ? "off" : "on");
 
    if (!state)
-      interval = settings->uints.video_swap_interval;
+      interval = swap_interval;
 
-   video_context_driver_swap_interval(&interval);
+   if (vk->ctx_driver->swap_interval)
+   {
+      if (adaptive_vsync_enabled && interval == 1)
+         interval = -1;
+      vk->ctx_driver->swap_interval(vk->ctx_data, interval);
+   }
 
-   /* Changing vsync might require recreating the swapchain, which means new VkImages
-    * to render into. */
+   /* Changing vsync might require recreating the swapchain,
+    * which means new VkImages to render into. */
    vulkan_check_swapchain(vk);
 }
 
 static bool vulkan_alive(void *data)
 {
-   unsigned temp_width  = 0;
-   unsigned temp_height = 0;
    bool ret             = false;
    bool quit            = false;
    bool resize          = false;
    vk_t *vk             = (vk_t*)data;
    bool is_shutdown     = rarch_ctl(RARCH_CTL_IS_SHUTDOWN, NULL);
-
-   video_driver_get_size(&temp_width, &temp_height);
+   unsigned temp_width  = vk->video_width;
+   unsigned temp_height = vk->video_height;
 
    vk->ctx_driver->check_window(vk->ctx_data,
             &quit, &resize, &temp_width, &temp_height, is_shutdown);
@@ -1338,7 +1358,11 @@ static bool vulkan_alive(void *data)
    ret = !vk->quitting;
 
    if (temp_width != 0 && temp_height != 0)
-      video_driver_set_size(&temp_width, &temp_height);
+   {
+      video_driver_set_size(temp_width, temp_height);
+      vk->video_width  = temp_width;
+      vk->video_height = temp_height;
+   }
 
    return ret;
 }
@@ -1346,9 +1370,11 @@ static bool vulkan_alive(void *data)
 static bool vulkan_suppress_screensaver(void *data, bool enable)
 {
    bool enabled = enable;
-   (void)data;
+   vk_t *vk     = (vk_t*)data;
 
-   return video_context_driver_suppress_screensaver(&enabled);
+   if (vk->ctx_data && vk->ctx_driver->suppress_screensaver)
+      return vk->ctx_driver->suppress_screensaver(vk->ctx_data, enabled);
+   return false;
 }
 
 static bool vulkan_set_shader(void *data,
@@ -1434,23 +1460,24 @@ static void vulkan_set_viewport(void *data, unsigned viewport_width,
       unsigned viewport_height, bool force_full, bool allow_rotate)
 {
    gfx_ctx_aspect_t aspect_data;
-   unsigned width, height;
-   int x                  = 0;
-   int y                  = 0;
-   float device_aspect    = (float)viewport_width / viewport_height;
-   struct video_ortho ortho = {0, 1, 0, 1, -1, 1};
-   settings_t *settings   = config_get_ptr();
-   vk_t *vk               = (vk_t*)data;
+   int x                     = 0;
+   int y                     = 0;
+   float device_aspect       = (float)viewport_width / viewport_height;
+   struct video_ortho ortho  = {0, 1, 0, 1, -1, 1};
+   settings_t *settings      = config_get_ptr();
+   bool video_scale_integer  = settings->bools.video_scale_integer;
+   unsigned aspect_ratio_idx = settings->uints.video_aspect_ratio_idx;
+   vk_t *vk                  = (vk_t*)data;
+   unsigned width            = vk->video_width;
+   unsigned height           = vk->video_height;
 
-   video_driver_get_size(&width, &height);
-
-   aspect_data.aspect     = &device_aspect;
-   aspect_data.width      = viewport_width;
-   aspect_data.height     = viewport_height;
+   aspect_data.aspect        = &device_aspect;
+   aspect_data.width         = viewport_width;
+   aspect_data.height        = viewport_height;
 
    video_context_driver_translate_aspect(&aspect_data);
 
-   if (settings->bools.video_scale_integer && !force_full)
+   if (video_scale_integer && !force_full)
    {
       video_viewport_get_scaled_integer(&vk->vp,
             viewport_width, viewport_height,
@@ -1463,7 +1490,7 @@ static void vulkan_set_viewport(void *data, unsigned viewport_width,
       float desired_aspect = video_driver_get_aspect_ratio();
 
 #if defined(HAVE_MENU)
-      if (settings->uints.video_aspect_ratio_idx == ASPECT_RATIO_CUSTOM)
+      if (aspect_ratio_idx == ASPECT_RATIO_CUSTOM)
       {
          const struct video_viewport *custom = video_viewport_get_custom();
 
@@ -1662,9 +1689,19 @@ static bool vulkan_frame(void *data, const void *frame,
    chain     = &vk->swapchain[frame_index];
    vk->chain = chain;
 
-   vulkan_descriptor_manager_restart(&chain->descriptor_manager);
-   vulkan_buffer_chain_discard(&chain->vbo);
-   vulkan_buffer_chain_discard(&chain->ubo);
+   {
+      struct vk_descriptor_manager *manager = &chain->descriptor_manager;
+      VK_DESCRIPTOR_MANAGER_RESTART(manager);
+   }
+
+   {
+      struct vk_buffer_chain *buff_chain = &chain->vbo;
+      VK_BUFFER_CHAIN_DISCARD(buff_chain);
+   }
+   {
+      struct vk_buffer_chain *buff_chain = &chain->ubo;
+      VK_BUFFER_CHAIN_DISCARD(buff_chain);
+   }
 
    /* Start recording the command buffer. */
    vk->cmd          = chain->cmd;
@@ -1711,8 +1748,10 @@ static bool vulkan_frame(void *data, const void *frame,
                chain->texture_optimal.memory
                ? VULKAN_TEXTURE_STAGING : VULKAN_TEXTURE_STREAMED);
 
-         vulkan_map_persistent_texture(
-               vk->context->device, &chain->texture);
+         {
+            struct vk_texture *texture = &chain->texture;
+            VK_MAP_PERSISTENT_TEXTURE(vk->context->device, texture);
+         }
 
          if (chain->texture.type == VULKAN_TEXTURE_STAGING)
          {
@@ -1882,7 +1921,8 @@ static bool vulkan_frame(void *data, const void *frame,
 #if defined(HAVE_MENU)
       if (vk->menu.enable)
       {
-         settings_t *settings = config_get_ptr();
+         settings_t *settings    = config_get_ptr();
+         bool menu_linear_filter = settings->bools.menu_linear_filter;
 
          menu_driver_frame(video_info);
 
@@ -1899,7 +1939,7 @@ static bool vulkan_frame(void *data, const void *frame,
             if (optimal->memory != VK_NULL_HANDLE)
                quad.texture = optimal;
 
-            if (settings->bools.menu_linear_filter)
+            if (menu_linear_filter)
             {
                quad.sampler = optimal->mipmap ?
                   vk->samplers.mipmap_linear : vk->samplers.linear;
@@ -1924,10 +1964,8 @@ static bool vulkan_frame(void *data, const void *frame,
             &video_info->osd_stat_params;
 
          if (osd_params)
-         {
-            font_driver_render_msg(video_info, NULL, video_info->stat_text,
-                  (const struct font_params*)&video_info->osd_stat_params);
-         }
+            font_driver_render_msg(vk, video_info, video_info->stat_text,
+                  &video_info->osd_stat_params, NULL);
       }
 #endif
 
@@ -1937,10 +1975,11 @@ static bool vulkan_frame(void *data, const void *frame,
 #endif
 
       if (!string_is_empty(msg))
-         font_driver_render_msg(video_info, NULL, msg, NULL);
+         font_driver_render_msg(vk, video_info, msg, NULL, NULL);
 
-#ifdef HAVE_MENU_WIDGETS
-      menu_widgets_frame(video_info);
+#ifdef HAVE_GFX_WIDGETS
+      if (video_info->widgets_inited)
+         gfx_widgets_frame(video_info);
 #endif
 
       /* End the render pass. We're done rendering to backbuffer now. */
@@ -2127,31 +2166,10 @@ static void vulkan_set_aspect_ratio(void *data, unsigned aspect_ratio_idx)
 {
    vk_t *vk = (vk_t*)data;
 
-   switch (aspect_ratio_idx)
-   {
-      case ASPECT_RATIO_SQUARE:
-         video_driver_set_viewport_square_pixel();
-         break;
-
-      case ASPECT_RATIO_CORE:
-         video_driver_set_viewport_core();
-         break;
-
-      case ASPECT_RATIO_CONFIG:
-         video_driver_set_viewport_config();
-         break;
-
-      default:
-         break;
-   }
-
-   video_driver_set_aspect_ratio_value(
-         aspectratio_lut[aspect_ratio_idx].value);
-
    if (!vk)
       return;
 
-   vk->keep_aspect = true;
+   vk->keep_aspect   = true;
    vk->should_resize = true;
 }
 
@@ -2164,8 +2182,10 @@ static void vulkan_apply_state_changes(void *data)
 
 static void vulkan_show_mouse(void *data, bool state)
 {
-   (void)data;
-   video_context_driver_show_mouse(&state);
+   vk_t                            *vk = (vk_t*)data;
+
+   if (vk && vk->ctx_driver->show_mouse)
+      vk->ctx_driver->show_mouse(vk->ctx_data, state);
 }
 
 static struct video_shader *vulkan_get_current_shader(void *data)
@@ -2192,8 +2212,10 @@ static bool vulkan_get_current_sw_framebuffer(void *data,
       chain->texture   = vulkan_create_texture(vk, &chain->texture,
             framebuffer->width, framebuffer->height, chain->texture.format,
             NULL, NULL, VULKAN_TEXTURE_STREAMED);
-      vulkan_map_persistent_texture(
-            vk->context->device, &chain->texture);
+      {
+         struct vk_texture *texture = &chain->texture;
+         VK_MAP_PERSISTENT_TEXTURE(vk->context->device, texture);
+      }
 
       if (chain->texture.type == VULKAN_TEXTURE_STAGING)
       {
@@ -2301,14 +2323,6 @@ static void vulkan_set_texture_enable(void *data, bool state, bool full_screen)
 
    vk->menu.enable = state;
    vk->menu.full_screen = full_screen;
-}
-
-static void vulkan_set_osd_msg(void *data,
-      video_frame_info_t *video_info,
-      const char *msg,
-      const void *params, void *font)
-{
-   font_driver_render_msg(video_info, font, msg, (const struct font_params *)params);
 }
 
 static uintptr_t vulkan_load_texture(void *video_data, void *data,
@@ -2422,7 +2436,7 @@ static const video_poke_interface_t vulkan_poke_interface = {
    vulkan_apply_state_changes,
    vulkan_set_texture_frame,
    vulkan_set_texture_enable,
-   vulkan_set_osd_msg,
+   font_driver_render_msg,
    vulkan_show_mouse,
    NULL,                               /* grab_mouse_toggle */
    vulkan_get_current_shader,
@@ -2442,11 +2456,11 @@ static void vulkan_viewport_info(void *data, struct video_viewport *vp)
    unsigned width, height;
    vk_t *vk = (vk_t*)data;
 
-   video_driver_get_size(&width, &height);
-
    if (!vk)
       return;
 
+   width           = vk->video_width;
+   height          = vk->video_height;
    /* Make sure we get the correct viewport. */
    vulkan_set_viewport(vk, width, height, false, true);
 
@@ -2525,8 +2539,9 @@ static bool vulkan_read_viewport(void *data, uint8_t *buffer, bool is_idle)
 #endif
 
       if (!staging->mapped)
-         vulkan_map_persistent_texture(
-               vk->context->device, staging);
+      {
+         VK_MAP_PERSISTENT_TEXTURE(vk->context->device, staging);
+      }
 
       vulkan_sync_texture_to_cpu(vk, staging);
 
@@ -2583,8 +2598,8 @@ static void vulkan_overlay_enable(void *data, bool enable)
       return;
 
    vk->overlay.enable = enable;
-   if (vk->fullscreen)
-      video_context_driver_show_mouse(&enable);
+   if (vk->ctx_driver->show_mouse)
+      vk->ctx_driver->show_mouse(vk->ctx_data, enable);
 }
 
 static void vulkan_overlay_full_screen(void *data, bool enable)
@@ -2789,8 +2804,8 @@ static void vulkan_get_overlay_interface(void *data,
 }
 #endif
 
-#if defined(HAVE_MENU) && defined(HAVE_MENU_WIDGETS)
-static bool vulkan_menu_widgets_enabled(void *data)
+#ifdef HAVE_GFX_WIDGETS
+static bool vulkan_gfx_widgets_enabled(void *data)
 {
    (void)data;
    return true;
@@ -2822,7 +2837,7 @@ video_driver_t video_vulkan = {
 #endif
    vulkan_get_poke_interface,
    NULL,                         /* vulkan_wrap_type_to_enum */
-#if defined(HAVE_MENU) && defined(HAVE_MENU_WIDGETS)
-   vulkan_menu_widgets_enabled
+#ifdef HAVE_GFX_WIDGETS
+   vulkan_gfx_widgets_enabled
 #endif
 };

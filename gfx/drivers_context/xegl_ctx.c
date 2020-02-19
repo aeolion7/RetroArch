@@ -27,6 +27,7 @@
 
 #include "../../frontend/frontend_driver.h"
 #include "../../configuration.h"
+#include "../../input/input_driver.h"
 #include "../../verbosity.h"
 
 #include "../common/egl_common.h"
@@ -455,7 +456,7 @@ error:
 
 static void gfx_ctx_xegl_input_driver(void *data,
       const char *joypad_name,
-      const input_driver_t **input, void **input_data)
+      input_driver_t **input, void **input_data)
 {
    void *xinput = input_x.init(joypad_name);
 
@@ -472,14 +473,6 @@ static bool gfx_ctx_xegl_suppress_screensaver(void *data, bool enable)
 
    x11_suspend_screensaver(video_driver_window_get(), enable);
 
-   return true;
-}
-
-static bool gfx_ctx_xegl_has_windowed(void *data)
-{
-   (void)data;
-
-   /* TODO - verify if this has windowed mode or not. */
    return true;
 }
 
@@ -502,16 +495,16 @@ static bool gfx_ctx_xegl_bind_api(void *video_driver,
          if ((major * 1000 + minor) >= 3001)
             break;
 #endif
-         return eglBindAPI(EGL_OPENGL_API);
+         return egl_bind_api(EGL_OPENGL_API);
       case GFX_CTX_OPENGL_ES_API:
 #ifndef EGL_KHR_create_context
          if (major >= 3)
             break;
 #endif
-         return eglBindAPI(EGL_OPENGL_ES_API);
+         return egl_bind_api(EGL_OPENGL_ES_API);
       case GFX_CTX_OPENVG_API:
 #ifdef HAVE_VG
-         return eglBindAPI(EGL_OPENVG_API);
+         return egl_bind_api(EGL_OPENVG_API);
 #endif
       default:
          break;
@@ -645,7 +638,7 @@ const gfx_ctx_driver_t gfx_ctx_x_egl =
    NULL, /* set_resize */
    x11_has_focus,
    gfx_ctx_xegl_suppress_screensaver,
-   gfx_ctx_xegl_has_windowed,
+   true, /* has_windowed */
    gfx_ctx_xegl_swap_buffers,
    gfx_ctx_xegl_input_driver,
    gfx_ctx_xegl_get_proc_address,

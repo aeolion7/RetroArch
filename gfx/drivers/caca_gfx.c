@@ -62,11 +62,11 @@ static void caca_gfx_create(void)
       caca_dither = caca_create_dither(16, caca_video_width, caca_video_height, caca_video_pitch,
                             0xf800, 0x7e0, 0x1f, 0x0);
 
-   video_driver_set_size(&caca_video_width, &caca_video_height);
+   video_driver_set_size(caca_video_width, caca_video_height);
 }
 
 static void *caca_gfx_init(const video_info_t *video,
-      const input_driver_t **input, void **input_data)
+      input_driver_t **input, void **input_data)
 {
    caca_t *caca        = (caca_t*)calloc(1, sizeof(*caca));
 
@@ -94,7 +94,8 @@ static void *caca_gfx_init(const video_info_t *video,
    }
 
    if (video->font_enable)
-      font_driver_init_osd(caca, false, video->is_threaded,
+      font_driver_init_osd(caca, video,
+            false, video->is_threaded,
             FONT_DRIVER_RENDER_CACA);
 
    return caca;
@@ -160,7 +161,7 @@ static bool caca_gfx_frame(void *data, const void *frame,
 #endif
 
    if (msg)
-      font_driver_render_msg(video_info, NULL, msg, NULL);
+      font_driver_render_msg(data, video_info, msg, NULL, NULL);
 
    if (draw)
    {
@@ -183,16 +184,13 @@ static bool caca_gfx_frame(void *data, const void *frame,
    return true;
 }
 
-static void caca_gfx_set_nonblock_state(void *data, bool toggle)
-{
-   (void)data;
-   (void)toggle;
-}
+static void caca_gfx_set_nonblock_state(void *data, bool a,
+      bool b, unsigned c) { }
 
 static bool caca_gfx_alive(void *data)
 {
    (void)data;
-   video_driver_set_size(&caca_video_width, &caca_video_height);
+   video_driver_set_size(caca_video_width, caca_video_height);
    return true;
 }
 
@@ -281,14 +279,6 @@ static void caca_set_texture_frame(void *data,
       memcpy(caca_menu_frame, frame, pitch * height);
 }
 
-static void caca_set_osd_msg(void *data,
-      video_frame_info_t *video_info,
-      const char *msg,
-      const void *params, void *font)
-{
-   font_driver_render_msg(video_info, font, msg, (const struct font_params*)params);
-}
-
 static const video_poke_interface_t caca_poke_interface = {
    NULL, /* get_flags */
    NULL,
@@ -305,7 +295,7 @@ static const video_poke_interface_t caca_poke_interface = {
    NULL,
    caca_set_texture_frame,
    NULL,
-   caca_set_osd_msg,
+   font_driver_render_msg,
    NULL,                   /* show_mouse */
    NULL,                   /* grab_mouse_toggle */
    NULL,                   /* get_current_shader */
@@ -320,7 +310,7 @@ static void caca_gfx_get_poke_interface(void *data,
    *iface = &caca_poke_interface;
 }
 
-void caca_gfx_set_viewport(void *data, unsigned viewport_width,
+static void caca_gfx_set_viewport(void *data, unsigned viewport_width,
       unsigned viewport_height, bool force_full, bool allow_rotate)
 {
 }

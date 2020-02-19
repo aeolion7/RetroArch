@@ -1,4 +1,4 @@
-/* Copyright  (C) 2010-2018 The RetroArch team
+/* Copyright  (C) 2010-2020 The RetroArch team
  *
  * ---------------------------------------------------------------------------------------
  * The following license statement only applies to this file (config_file.c).
@@ -173,7 +173,7 @@ static char *strip_comment(char *str)
       else if (!cut_comment && literal)
       {
          cut_comment = true;
-         str         = literal + 1;
+         str         = (literal < string_end) ? literal + 1 : string_end;
       }
       else
       {
@@ -339,8 +339,8 @@ static bool parse_line(config_file_t *conf,
       comment++;
       if (strstr(comment, "include ") == comment)
       {
-         char *line = comment + STRLEN_CONST("include ");
-         char *path = extract_value(line, false);
+         char *include_line = comment + STRLEN_CONST("include ");
+         char *path         = extract_value(include_line, false);
 
          if (!path)
             return false;
@@ -396,17 +396,7 @@ static config_file_t *config_file_new_internal(
       const char *path, unsigned depth, config_file_cb_t *cb)
 {
    RFILE              *file = NULL;
-   struct config_file *conf = (struct config_file*)malloc(sizeof(*conf));
-   if (!conf)
-      return NULL;
-
-   conf->path                     = NULL;
-   conf->entries                  = NULL;
-   conf->tail                     = NULL;
-   conf->last                     = NULL;
-   conf->includes                 = NULL;
-   conf->include_depth            = 0;
-   conf->guaranteed_no_duplicates = false ;
+   struct config_file *conf = config_file_new_alloc();
 
    if (!path || !*path)
       return conf;
@@ -460,7 +450,7 @@ static config_file_t *config_file_new_internal(
 
          conf->tail = list;
 
-         if (cb != NULL && list->key != NULL && list->value != NULL)
+         if (cb && list->key && list->value)
             cb->config_file_new_entry_cb(list->key, list->value) ;
       }
 
@@ -510,10 +500,12 @@ void config_file_free(config_file_t *conf)
    while (inc_tmp)
    {
       struct config_include_list *hold = NULL;
-      free(inc_tmp->path);
+      if (inc_tmp->path)
+         free(inc_tmp->path);
       hold    = (struct config_include_list*)inc_tmp;
       inc_tmp = inc_tmp->next;
-      free(hold);
+      if (hold)
+         free(hold);
    }
 
    if (conf->path)
@@ -523,7 +515,7 @@ void config_file_free(config_file_t *conf)
 
 bool config_append_file(config_file_t *conf, const char *path)
 {
-   config_file_t *new_conf = config_file_new(path);
+   config_file_t *new_conf = config_file_new_from_path_to_string(path);
    if (!new_conf)
       return false;
 
@@ -538,7 +530,8 @@ bool config_append_file(config_file_t *conf, const char *path)
    return true;
 }
 
-config_file_t *config_file_new_from_string(const char *from_string)
+config_file_t *config_file_new_from_string(const char *from_string,
+      const char *path)
 {
    size_t i;
    struct string_list *lines = NULL;
@@ -556,6 +549,9 @@ config_file_t *config_file_new_from_string(const char *from_string)
    conf->includes                 = NULL;
    conf->include_depth            = 0;
    conf->guaranteed_no_duplicates = false ;
+
+   if (!string_is_empty(path))
+      conf->path                  = strdup(path);
 
    lines                          = string_split(from_string, "\n");
    if (!lines)
@@ -601,6 +597,26 @@ config_file_t *config_file_new_from_string(const char *from_string)
    return conf;
 }
 
+config_file_t *config_file_new_from_path_to_string(const char *path)
+{
+   int64_t length                = 0;
+   uint8_t *ret_buf              = NULL;
+   config_file_t *conf           = NULL;
+
+   if (path_is_valid(path))
+   {
+      if (filestream_read_file(path, (void**)&ret_buf, &length))
+      {
+         if (length >= 0)
+            conf = config_file_new_from_string((const char*)ret_buf, path);
+         if ((void*)ret_buf)
+            free((void*)ret_buf);
+      }
+   }
+
+   return conf;
+}
+
 config_file_t *config_file_new_with_callback(
       const char *path, config_file_cb_t *cb)
 {
@@ -610,6 +626,23 @@ config_file_t *config_file_new_with_callback(
 config_file_t *config_file_new(const char *path)
 {
    return config_file_new_internal(path, 0, NULL);
+}
+
+config_file_t *config_file_new_alloc(void)
+{
+   struct config_file *conf = (struct config_file*)malloc(sizeof(*conf));
+   if (!conf)
+      return NULL;
+
+   conf->path                     = NULL;
+   conf->entries                  = NULL;
+   conf->tail                     = NULL;
+   conf->last                     = NULL;
+   conf->includes                 = NULL;
+   conf->include_depth            = 0;
+   conf->guaranteed_no_duplicates = false ;
+
+   return conf;
 }
 
 static struct config_entry_list *config_get_entry(
@@ -841,7 +874,8 @@ void config_set_string(config_file_t *conf, const char *key, const char *val)
 
    if (entry && !entry->readonly)
    {
-      free(entry->value);
+      if (entry->value)
+         free(entry->value);
       entry->value = strdup(val);
       return;
    }
@@ -971,7 +1005,6 @@ bool config_file_write(config_file_t *conf, const char *path, bool sort)
 {
    if (!string_is_empty(path))
    {
-      void* buf  = NULL;
 #ifdef ORBIS
       int fd     = orbisOpen(path,O_RDWR|O_CREAT,0644);
       if (fd < 0)
@@ -979,6 +1012,7 @@ bool config_file_write(config_file_t *conf, const char *path, bool sort)
       config_file_dump_orbis(conf,fd);
       orbisClose(fd);
 #else
+      void* buf  = NULL;
       FILE *file = (FILE*)fopen_utf8(path, "wb");
       if (!file)
          return false;
@@ -993,7 +1027,8 @@ bool config_file_write(config_file_t *conf, const char *path, bool sort)
 
       if (file != stdout)
          fclose(file);
-      free(buf);
+      if (buf)
+         free(buf);
 #endif
    }
    else
@@ -1108,63 +1143,3 @@ bool config_file_exists(const char *path)
    config_file_free(config);
    return true;
 }
-
-#if 0
-static void test_config_file_parse_contains(
-      const char * cfgtext,
-      const char *key, const char *val)
-{
-   config_file_t *cfg = config_file_new_from_string(cfgtext);
-   char          *out = NULL;
-   bool            ok = false;
-
-   if (!cfg)
-      abort();
-
-   ok = config_get_string(cfg, key, &out);
-   if (ok != (bool)val)
-      abort();
-   if (!val)
-      return;
-
-   if (out == NULL)
-      out = strdup("");
-   if (strcmp(out, val) != 0)
-      abort();
-   free(out);
-}
-
-static void test_config_file(void)
-{
-   test_config_file_parse_contains("foo = \"bar\"\n",   "foo", "bar");
-   test_config_file_parse_contains("foo = \"bar\"",     "foo", "bar");
-   test_config_file_parse_contains("foo = \"bar\"\r\n", "foo", "bar");
-   test_config_file_parse_contains("foo = \"bar\"",     "foo", "bar");
-
-#if 0
-   /* turns out it treats empty as nonexistent -
-    * should probably be fixed */
-   test_config_file_parse_contains("foo = \"\"\n",   "foo", "");
-   test_config_file_parse_contains("foo = \"\"",     "foo", "");
-   test_config_file_parse_contains("foo = \"\"\r\n", "foo", "");
-   test_config_file_parse_contains("foo = \"\"",     "foo", "");
-#endif
-
-   test_config_file_parse_contains("foo = \"\"\n",   "bar", NULL);
-   test_config_file_parse_contains("foo = \"\"",     "bar", NULL);
-   test_config_file_parse_contains("foo = \"\"\r\n", "bar", NULL);
-   test_config_file_parse_contains("foo = \"\"",     "bar", NULL);
-}
-
-/* compile with:
- gcc config_file.c -g -I ../include/ \
- ../streams/file_stream.c ../vfs/vfs_implementation.c ../lists/string_list.c \
- ../compat/compat_strl.c file_path.c ../compat/compat_strcasestr.c \
- && ./a.out
-*/
-
-int main(void)
-{
-	test_config_file();
-}
-#endif

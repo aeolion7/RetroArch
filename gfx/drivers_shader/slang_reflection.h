@@ -89,10 +89,23 @@ enum slang_constant_buffer
 {
    SLANG_CBUFFER_UBO = 0,
    SLANG_CBUFFER_PC,
-   SLANG_CBUFFER_MAX,
+   SLANG_CBUFFER_MAX
 };
 
 /* Vulkan minimum limit. */
 #define SLANG_NUM_BINDINGS 16
+
+struct slang_texture_semantic_map
+{
+   enum slang_texture_semantic semantic;
+   unsigned index;
+};
+
+struct slang_semantic_map
+{
+   enum slang_semantic semantic;
+   unsigned index;
+};
+
 
 #endif

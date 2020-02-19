@@ -19,6 +19,8 @@
 #include <vector>
 #include <algorithm>
 #include <stdio.h>
+#include <compat/strl.h>
+#include "glslang_util.h"
 #include "../../verbosity.h"
 
 using namespace std;
@@ -52,23 +54,6 @@ static const char *semantic_uniform_names[] = {
    "FrameDirection",
 };
 
-static bool slang_texture_semantic_is_array(slang_texture_semantic sem)
-{
-   switch (sem)
-   {
-      case SLANG_TEXTURE_SEMANTIC_ORIGINAL_HISTORY:
-      case SLANG_TEXTURE_SEMANTIC_PASS_OUTPUT:
-      case SLANG_TEXTURE_SEMANTIC_PASS_FEEDBACK:
-      case SLANG_TEXTURE_SEMANTIC_USER:
-         return true;
-
-      default:
-         break;
-   }
-
-   return false;
-}
-
 slang_reflection::slang_reflection()
 {
    unsigned i;
@@ -78,39 +63,6 @@ slang_reflection::slang_reflection()
             slang_texture_semantic_is_array(
                static_cast<slang_texture_semantic>(i))
             ? 0 : 1);
-}
-
-static slang_texture_semantic slang_name_to_texture_semantic_array(
-      const string &name, const char **names,
-      unsigned *index)
-{
-   unsigned i = 0;
-   while (*names)
-   {
-      const char                   *n = *names;
-      slang_texture_semantic semantic = static_cast<slang_texture_semantic>(i);
-
-      if (slang_texture_semantic_is_array(semantic))
-      {
-         size_t baselen = strlen(n);
-         int        cmp = strncmp(n, name.c_str(), baselen);
-
-         if (cmp == 0)
-         {
-            *index = (unsigned)strtoul(name.c_str() + baselen, nullptr, 0);
-            return semantic;
-         }
-      }
-      else if (name == n)
-      {
-         *index = 0;
-         return semantic;
-      }
-
-      i++;
-      names++;
-   }
-   return SLANG_INVALID_TEXTURE_SEMANTIC;
 }
 
 static slang_texture_semantic slang_name_to_texture_semantic(
@@ -125,7 +77,7 @@ static slang_texture_semantic slang_name_to_texture_semantic(
    }
 
    return slang_name_to_texture_semantic_array(
-         name, texture_semantic_names, index);
+         name.c_str(), texture_semantic_names, index);
 }
 
 static slang_texture_semantic slang_uniform_name_to_texture_semantic(
@@ -139,7 +91,7 @@ static slang_texture_semantic slang_uniform_name_to_texture_semantic(
       return itr->second.semantic;
    }
 
-   return slang_name_to_texture_semantic_array(name,
+   return slang_name_to_texture_semantic_array(name.c_str(),
          texture_semantic_uniform_names, index);
 }
 
@@ -182,9 +134,9 @@ static bool set_ubo_texture_offset(
       size_t offset, bool push_constant)
 {
    resize_minimum(reflection->semantic_textures[semantic], index + 1);
-   auto &sem           = reflection->semantic_textures[semantic][index];
-   auto &active        = push_constant ? sem.push_constant : sem.uniform;
-   auto &active_offset = push_constant ? sem.push_constant_offset : sem.ubo_offset;
+   slang_texture_semantic_meta &sem = reflection->semantic_textures[semantic][index];
+   bool &active                     = push_constant ? sem.push_constant : sem.uniform;
+   size_t &active_offset            = push_constant ? sem.push_constant_offset : sem.ubo_offset;
 
    if (active)
    {
@@ -212,9 +164,9 @@ static bool set_ubo_float_parameter_offset(
       bool push_constant)
 {
    resize_minimum(reflection->semantic_float_parameters, index + 1);
-   auto &sem           = reflection->semantic_float_parameters[index];
-   auto &active        = push_constant ? sem.push_constant : sem.uniform;
-   auto &active_offset = push_constant ? sem.push_constant_offset : sem.ubo_offset;
+   slang_semantic_meta &sem = reflection->semantic_float_parameters[index];
+   bool   &active           = push_constant ? sem.push_constant : sem.uniform;
+   size_t &active_offset    = push_constant ? sem.push_constant_offset : sem.ubo_offset;
 
    if (active)
    {
@@ -251,9 +203,9 @@ static bool set_ubo_offset(
       slang_semantic semantic,
       size_t offset, unsigned num_components, bool push_constant)
 {
-   auto &sem           = reflection->semantics[semantic];
-   auto &active        = push_constant ? sem.push_constant : sem.uniform;
-   auto &active_offset = push_constant ? sem.push_constant_offset : sem.ubo_offset;
+   slang_semantic_meta &sem = reflection->semantics[semantic];
+   bool &active             = push_constant ? sem.push_constant : sem.uniform;
+   size_t &active_offset    = push_constant ? sem.push_constant_offset : sem.ubo_offset;
 
    if (active)
    {
@@ -336,9 +288,9 @@ static bool add_active_buffer_ranges(
    {
       unsigned sem_index             = 0;
       unsigned tex_sem_index         = 0;
-      auto &name                     = compiler.get_member_name(
+      const string &name             = compiler.get_member_name(
             resource.base_type_id, ranges[i].index);
-      auto &type                     = compiler.get_type(
+      const SPIRType &type           = compiler.get_type(
             compiler.get_type(resource.base_type_id).member_types[
             ranges[i].index]);
       slang_semantic sem             = slang_uniform_name_to_semantic(
@@ -349,7 +301,7 @@ static bool add_active_buffer_ranges(
 
       if (tex_sem == SLANG_TEXTURE_SEMANTIC_PASS_OUTPUT && tex_sem_index >= reflection->pass_number)
       {
-         RARCH_ERR("[slang]: Non causal filter chain detected."
+         RARCH_ERR("[slang]: Non causal filter chain detected. "
                "Shader is trying to use output from pass #%u,"
                " but this shader is pass #%u.\n",
                tex_sem_index, reflection->pass_number);
@@ -637,7 +589,15 @@ bool slang_reflect(
             *reflection->texture_semantic_map,
             fragment.sampled_images[i].name, &array_index);
 
-      if (index == SLANG_INVALID_TEXTURE_SEMANTIC)
+      if (index == SLANG_TEXTURE_SEMANTIC_PASS_OUTPUT && array_index >= reflection->pass_number)
+      {
+         RARCH_ERR("[slang]: Non causal filter chain detected. "
+               "Shader is trying to use output from pass #%u,"
+               " but this shader is pass #%u.\n",
+               array_index, reflection->pass_number);
+         return false;
+      }
+      else if (index == SLANG_INVALID_TEXTURE_SEMANTIC)
       {
          RARCH_ERR("[slang]: Non-semantic textures not supported yet.\n");
          return false;
@@ -651,6 +611,7 @@ bool slang_reflect(
       semantic.texture                      = true;
    }
 
+#ifdef DEBUG
    RARCH_LOG("[slang]: Reflection\n");
    RARCH_LOG("[slang]:   Textures:\n");
 
@@ -715,8 +676,13 @@ bool slang_reflect(
       }
    }
 
-   RARCH_LOG("[slang]:\n");
-   RARCH_LOG("[slang]:   Parameters:\n");
+   {
+      char buf[64];
+      buf[0] = '\0';
+      snprintf(buf, sizeof(buf),
+            "[slang]:\n%s [slang]:   Parameters:\n", FILE_PATH_LOG_INFO);
+      RARCH_LOG(buf);
+   }
 
    for (i = 0; i < reflection->semantic_float_parameters.size(); i++)
    {
@@ -733,6 +699,7 @@ bool slang_reflect(
          RARCH_LOG("[slang]:     #%u (PushOffset: %u)\n", i,
                (unsigned int)param->push_constant_offset);
    }
+#endif
 
    return true;
 }

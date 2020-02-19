@@ -50,7 +50,7 @@ typedef struct xshm
 } xshm_t;
 
 static void *xshm_gfx_init(const video_info_t *video,
-      const input_driver_t **input, void **input_data)
+      input_driver_t **input, void **input_data)
 {
    xshm_t* xshm = (xshm_t*)malloc(sizeof(xshm_t));
    Window parent;
@@ -118,10 +118,7 @@ static bool xshm_gfx_frame(void *data, const void *frame, unsigned width,
    return true;
 }
 
-static void xshm_gfx_set_nonblock_state(void *data, bool toggle)
-{
-
-}
+static void xshm_gfx_set_nonblock_state(void *a, bool b, bool c, unsigned d) { }
 
 static bool xshm_gfx_alive(void *data)
 {

@@ -49,28 +49,29 @@ static time_t _gmtotime_t (
         int sc
         )
 {
-   int passed_years;
-   long passed_days;
-   long passed_seconds_current_day;
    time_t seconds_from_1970 = -1;
 
-   if ((yr >= MIN_SUPPORTED_YEAR) || (yr <= MAX_SUPPORTED_YEAR))  {
-      passed_years = (long)yr - MIN_SUPPORTED_YEAR; /* Years after 1970 */
+   if ((yr >= MIN_SUPPORTED_YEAR) || (yr <= MAX_SUPPORTED_YEAR)) 
+   {
+      long passed_seconds_current_day;
+      int passed_years  = (long)yr - MIN_SUPPORTED_YEAR; /* Years after 1970 */
       /* Calculate days for these years */
-      passed_days = passed_years * DAYS_YEAR;
-      passed_days += (passed_years >> 2) * (DAYS_YEAR + 1); /* passed leap years */
-      passed_days += dy + _days[mo - 1]; /* passed days in the year */
-      if ( !(yr & 3) && (mo > 2) ) {
+      long passed_days  = passed_years * DAYS_YEAR;
+      passed_days      += (passed_years >> 2) * (DAYS_YEAR + 1); /* passed leap years */
+      passed_days      += dy + _days[mo - 1]; /* passed days in the year */
+
+      if (!(yr & 3) && (mo > 2))
          passed_days++; /* if current year, is a leap year */
-      }
+
       passed_seconds_current_day = (((hr * MINS_HOUR) + mn) * SECS_MIN) + sc;
-      seconds_from_1970 = (passed_days * HOURS_DAY * MINS_HOUR * SECS_MIN) + passed_seconds_current_day;
+      seconds_from_1970          = (passed_days * HOURS_DAY * MINS_HOUR * SECS_MIN) + passed_seconds_current_day;
    }
 
    return seconds_from_1970;
 }
 
-time_t ps2_time(time_t *t) {
+time_t ps2_time(time_t *t)
+{
    time_t tim;
    sceCdCLOCK clocktime; /* defined in libcdvd.h */
 
@@ -78,16 +79,16 @@ time_t ps2_time(time_t *t) {
    configConvertToLocalTime(&clocktime);
 
    tim =   _gmtotime_t (DEC(clocktime.year)+ STARTING_YEAR,
-                        DEC(clocktime.month),
-                        DEC(clocktime.day),
-                        DEC(clocktime.hour),
-                        DEC(clocktime.minute),
-                        DEC(clocktime.second));
+         DEC(clocktime.month),
+         DEC(clocktime.day),
+         DEC(clocktime.hour),
+         DEC(clocktime.minute),
+         DEC(clocktime.second));
 
-	if(t)
-		*t = tim;
+   if (t)
+      *t = tim;
 
-	return tim;
+   return tim;
 }
 
 /* Protected methods in libc */
@@ -107,8 +108,31 @@ clock_t clock(void)
    return SDL_GetTicks();
 }
 
-time_t time(time_t *t) {
+time_t time(time_t *t)
+{
    time_t tim = -1;
    /* TODO: This function need to be implemented again because the SDK one is not working fine */
-   return time;
+   return tim;
+}
+
+time_t mktime(struct tm *timeptr)
+{
+   time_t tim = -1;
+   /* TODO: This function need to be implemented again because the SDK one is not working fine */
+   return tim;
+}
+
+struct tm *localtime(const time_t *timep)
+{
+   return NULL;
+}
+
+size_t strftime(char *s, size_t max, const char *format, const struct tm *tm)
+{
+   return -1;
+}
+
+char *setlocale(int category, const char *locale)
+{
+   return NULL;
 }

@@ -70,7 +70,7 @@ static int64_t get_token(intfstream_t *fd, char *token, uint64_t max_len)
    int64_t len   = 0;
    int in_string = 0;
 
-   while (1)
+   for (;;)
    {
       int64_t rv = (int64_t)intfstream_read(fd, c, 1);
       if (rv == 0)
@@ -489,7 +489,7 @@ int cue_find_track(const char *cue_path, bool first,
 
    while (get_token(fd, tmp_token, MAX_TOKEN_LEN) > 0)
    {
-      if (string_is_equal(tmp_token, "FILE"))
+      if (string_is_equal_noncase(tmp_token, "FILE"))
       {
          /* Set last index to last EOF */
          if (file_size != -1)
@@ -512,14 +512,14 @@ int cue_find_track(const char *cue_path, bool first,
          get_token(fd, tmp_token, MAX_TOKEN_LEN);
 
       }
-      else if (string_is_equal(tmp_token, "TRACK"))
+      else if (string_is_equal_noncase(tmp_token, "TRACK"))
       {
          get_token(fd, tmp_token, MAX_TOKEN_LEN);
          get_token(fd, tmp_token, MAX_TOKEN_LEN);
-         is_data = !string_is_equal(tmp_token, "AUDIO");
+         is_data = !string_is_equal_noncase(tmp_token, "AUDIO");
          ++track;
       }
-      else if (string_is_equal(tmp_token, "INDEX"))
+      else if (string_is_equal_noncase(tmp_token, "INDEX"))
       {
          int m, s, f;
          get_token(fd, tmp_token, MAX_TOKEN_LEN);
@@ -595,7 +595,7 @@ bool cue_next_file(intfstream_t *fd,
 
    while (get_token(fd, tmp_token, MAX_TOKEN_LEN) > 0)
    {
-      if (string_is_equal(tmp_token, "FILE"))
+      if (string_is_equal_noncase(tmp_token, "FILE"))
       {
          get_token(fd, tmp_token, MAX_TOKEN_LEN);
          fill_pathname_join(path, cue_dir, tmp_token, (size_t)max_len);

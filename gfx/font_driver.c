@@ -24,7 +24,6 @@
 #include "font_driver.h"
 #include "video_thread_wrapper.h"
 
-#include "../configuration.h"
 #include "../retroarch.h"
 #include "../verbosity.h"
 
@@ -119,9 +118,7 @@ static bool d3d8_font_init_first(
 
 #ifdef HAVE_D3D9
 static const font_renderer_t *d3d9_font_backends[] = {
-#if defined(_XBOX)
-   &d3d_xbox360_font,
-#elif defined(_WIN32) && defined(HAVE_D3DX)
+#if defined(_WIN32) && defined(HAVE_D3DX)
    &d3d_win32_font,
 #endif
    NULL
@@ -187,9 +184,6 @@ static bool gl1_font_init_first(
 #if defined(HAVE_OPENGL)
 static const font_renderer_t *gl_font_backends[] = {
    &gl_raster_font,
-#if defined(HAVE_LIBDBGFONT)
-   &libdbg_font,
-#endif
    NULL,
 };
 
@@ -342,6 +336,7 @@ static bool vga_font_init_first(
 }
 #endif
 
+#ifdef HAVE_GDI
 #if defined(_WIN32) && !defined(_XBOX) && !defined(__WINRT__)
 static const font_renderer_t *gdi_font_backends[] = {
    &gdi_font,
@@ -371,6 +366,7 @@ static bool gdi_font_init_first(
 
    return false;
 }
+#endif
 #endif
 
 #ifdef HAVE_VULKAN
@@ -775,10 +771,12 @@ static bool font_init_first(
          return switch_font_init_first(font_driver, font_handle,
                video_data, font_path, font_size, is_threaded);
 #endif
+#ifdef HAVE_GDI
 #if defined(_WIN32) && !defined(_XBOX) && !defined(__WINRT__)
       case FONT_DRIVER_RENDER_GDI:
          return gdi_font_init_first(font_driver, font_handle,
                video_data, font_path, font_size, is_threaded);
+#endif
 #endif
 #ifdef DJGPP
       case FONT_DRIVER_RENDER_VGA:
@@ -1032,12 +1030,14 @@ end:
 #endif
 
 void font_driver_render_msg(
+      void *data,
       video_frame_info_t *video_info,
-      void *font_data,
       const char *msg,
-      const struct font_params *params)
+      const void *_params,
+      void *font_data)
 {
-   font_data_t *font = (font_data_t*)(font_data
+   const struct font_params *params = (const struct font_params*)_params;
+   font_data_t                *font = (font_data_t*)(font_data
          ? font_data : video_font_driver);
 
    if (msg && *msg && font && font->renderer && font->renderer->render_msg)
@@ -1154,17 +1154,18 @@ font_data_t *font_driver_init_first(
 
 void font_driver_init_osd(
       void *video_data,
+      const void *video_info_data,
       bool threading_hint,
       bool is_threaded,
       enum font_driver_render_api api)
 {
-   settings_t *settings = config_get_ptr();
-   if (video_font_driver)
+   const video_info_t *video_info = (const video_info_t*)video_info_data;
+   if (video_font_driver || !video_info)
       return;
 
    video_font_driver = font_driver_init_first(video_data,
-         *settings->paths.path_font ? settings->paths.path_font : NULL,
-         settings->floats.video_font_size, threading_hint, is_threaded, api);
+         *video_info->path_font ? video_info->path_font : NULL,
+         video_info->font_size, threading_hint, is_threaded, api);
 
    if (!video_font_driver)
       RARCH_ERR("[font]: Failed to initialize OSD font.\n");

@@ -37,9 +37,9 @@
 
 #ifdef HAVE_MENU
 #import "../../menu/menu_driver.h"
-#ifdef HAVE_MENU_WIDGETS
-#import "../../menu/widgets/menu_widgets.h"
 #endif
+#ifdef HAVE_GFX_WIDGETS
+#import "../gfx_widgets.h"
 #endif
 
 #import "../font_driver.h"
@@ -61,9 +61,10 @@ static uint32_t metal_get_flags(void *data);
 static bool metal_set_shader(void *data,
                              enum rarch_shader_type type, const char *path);
 
-static void *metal_init(const video_info_t *video,
-                        const input_driver_t **input,
-                        void **input_data)
+static void *metal_init(
+      const video_info_t *video,
+      input_driver_t **input,
+      void **input_data)
 {
    [apple_platform setViewType:APPLE_VIEW_TYPE_METAL];
 
@@ -103,7 +104,8 @@ static bool metal_frame(void *data, const void *frame,
                      info:video_info];
 }
 
-static void metal_set_nonblock_state(void *data, bool non_block)
+static void metal_set_nonblock_state(void *data, bool non_block,
+      bool adaptive_vsync_enabled, unsigned swap_interval)
 {
    MetalDriver *md = (__bridge MetalDriver *)data;
    md.context.displaySyncEnabled = !non_block;
@@ -243,27 +245,6 @@ static void metal_set_aspect_ratio(void *data, unsigned aspect_ratio_idx)
 {
    MetalDriver *md = (__bridge MetalDriver *)data;
 
-   switch (aspect_ratio_idx)
-   {
-      case ASPECT_RATIO_SQUARE:
-         video_driver_set_viewport_square_pixel();
-         break;
-
-      case ASPECT_RATIO_CORE:
-         video_driver_set_viewport_core();
-         break;
-
-      case ASPECT_RATIO_CONFIG:
-         video_driver_set_viewport_config();
-         break;
-
-      default:
-         break;
-   }
-
-   video_driver_set_aspect_ratio_value(
-      aspectratio_lut[aspect_ratio_idx].value);
-
    md.keepAspect = YES;
    [md setNeedsResize];
 }
@@ -299,14 +280,6 @@ static void metal_set_texture_enable(void *data, bool state, bool full_screen)
 #if 0
    md.menu.fullScreen = full_screen;
 #endif
-}
-
-static void metal_set_osd_msg(void *data,
-                              video_frame_info_t *video_info,
-                              const char *msg,
-                              const void *params, void *font)
-{
-   font_driver_render_msg(video_info, font, msg, (const struct font_params *)params);
 }
 
 static void metal_show_mouse(void *data, bool state)
@@ -350,7 +323,7 @@ static const video_poke_interface_t metal_poke_interface = {
    .apply_state_changes = metal_apply_state_changes,
    .set_texture_frame   = metal_set_texture_frame,
    .set_texture_enable  = metal_set_texture_enable,
-   .set_osd_msg         = metal_set_osd_msg,
+   .set_osd_msg         = font_driver_render_msg,
    .show_mouse          = metal_show_mouse,
    .get_current_shader  = metal_get_current_shader,
 };
@@ -438,8 +411,8 @@ static void metal_get_overlay_interface(void *data,
 
 #endif
 
-#if defined(HAVE_MENU) && defined(HAVE_MENU_WIDGETS)
-static bool metal_menu_widgets_enabled(void *data)
+#ifdef HAVE_GFX_WIDGETS
+static bool metal_gfx_widgets_enabled(void *data)
 {
    (void)data;
    return true;
@@ -470,7 +443,7 @@ video_driver_t video_metal = {
 #endif
    metal_get_poke_interface,
    NULL, /* metal_wrap_type_to_enum */
-#if defined(HAVE_MENU) && defined(HAVE_MENU_WIDGETS)
-   metal_menu_widgets_enabled
+#ifdef HAVE_GFX_WIDGETS
+   metal_gfx_widgets_enabled
 #endif
 };

@@ -20,11 +20,9 @@
 #include <streams/file_stream.h>
 #include <string/stdstring.h>
 
-#include "input_driver.h"
 #include "input_remapping.h"
 #include "../configuration.h"
 #include "../retroarch.h"
-#include "../verbosity.h"
 
 static unsigned old_analog_dpad_mode[MAX_USERS];
 static unsigned old_libretro_device[MAX_USERS];
@@ -65,7 +63,7 @@ bool input_remapping_load_file(void *data, const char *path)
          "l3", "r3", "l_x+", "l_x-", "l_y+", "l_y-", "r_x+", "r_x-", "r_y+", "r_y-" };
 
       old_analog_dpad_mode[i] = settings->uints.input_analog_dpad_mode[i];
-      old_libretro_device[i] = settings->uints.input_libretro_device[i];
+      old_libretro_device[i]  = settings->uints.input_libretro_device[i];
 
       s1[0] = '\0';
       s2[0] = '\0';
@@ -114,15 +112,11 @@ bool input_remapping_load_file(void *data, const char *path)
                   s3,
                   key_strings[j]);
 
-            /* RARCH_LOG("pre_ident: %s:%d\n", stk_ident[j], settings->uints.input_remap_ids[i][j]); */
-
             if (config_get_int(conf, stk_ident[k], &stk_remap) && stk_remap != -1)
                settings->uints.input_remap_ids[i][j] = stk_remap;
             else if (config_get_int(conf, stk_ident[k], &stk_remap) && stk_remap == -1)
                settings->uints.input_remap_ids[i][j] = RARCH_UNMAPPED;
             /* else do nothing, important */
-
-            /*RARCH_LOG("stk_ident: %s:%d\n", stk_ident[j], settings->uints.input_remap_ids[i][j]);*/
          }
       }
 
@@ -166,12 +160,9 @@ bool input_remapping_save_file(const char *path)
 
    free(buf);
 
-   conf = config_file_new(remap_file);
-
-   if (!conf)
+   if (!(conf = config_file_new_from_path_to_string(remap_file)))
    {
-      conf = config_file_new(NULL);
-      if (!conf)
+      if (!(conf = config_file_new_alloc()))
       {
          free(remap_file);
          return false;
@@ -252,19 +243,16 @@ bool input_remapping_save_file(const char *path)
    return ret;
 }
 
-bool input_remapping_remove_file(const char *path)
+bool input_remapping_remove_file(const char *path,
+      const char *dir_input_remapping)
 {
    bool ret                = false;
    size_t path_size        = PATH_MAX_LENGTH * sizeof(char);
    char *buf               = (char*)malloc(PATH_MAX_LENGTH * sizeof(char));
    char *remap_file        = (char*)malloc(PATH_MAX_LENGTH * sizeof(char));
-   settings_t    *settings = config_get_ptr();
+   buf[0] = remap_file[0]  = '\0';
 
-   buf[0] = remap_file[0]            = '\0';
-
-   fill_pathname_join(buf, settings->paths.directory_input_remapping,
-         path, path_size);
-
+   fill_pathname_join(buf, dir_input_remapping, path, path_size);
    fill_pathname_noext(remap_file, buf, ".rmp", path_size);
 
    ret = filestream_delete(remap_file) == 0 ? true : false;

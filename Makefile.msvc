@@ -11,6 +11,7 @@ WindowsSdkDir = C:\Program Files (x86)\Windows Kits\10\$(NOTHING)
 WindowsSDKVersion := 10.0.14393.0\$(NOTHING)
 VCINSTALLDIR := C:\Program Files (x86)\Microsoft Visual Studio 14.0\VC\$(NOTHING)
 
+HAVE_AUDIOMIXER          := 1
 HAVE_D3DX                := 1
 HAVE_D3D8                := 0
 HAVE_D3D9                := 1
@@ -20,7 +21,7 @@ HAVE_D3D12               := 1
 HAVE_CG                  := 1
 HAVE_OPENGL              := 1
 HAVE_OPENGL1             := 1
-HAVE_MENU_WIDGETS			 := 1
+HAVE_GFX_WIDGETS			 := 1
 HAVE_VULKAN              := 1
 HAVE_XAUDIO              := 1
 HAVE_XINPUT              := 1
@@ -30,7 +31,7 @@ HAVE_WINMM               := 1
 
 HAVE_RPNG                := 1
 HAVE_ZLIB                := 1
-WANT_ZLIB                := 1
+HAVE_CONFIGFILE          := 1
 HAVE_MENU                := 1
 HAVE_RGUI                := 1
 HAVE_XMB                 := 1

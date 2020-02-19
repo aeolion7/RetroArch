@@ -166,7 +166,7 @@ static void frontend_gx_get_environment_settings(
 
    /* This situation can happen on some loaders so we really need some
       fake args or else retroarch will just crash on parsing NULL pointers */
-   if(*argc == 0 || argv == NULL)
+   if(*argc == 0 || !argv)
    {
       struct rarch_main_wrap *args = (struct rarch_main_wrap*)params_data;
       if (args)
@@ -366,7 +366,7 @@ static void frontend_gx_exec(const char *path, bool should_load_game)
 #endif
 }
 
-static void frontend_gx_exitspawn(char *s, size_t len)
+static void frontend_gx_exitspawn(char *s, size_t len, char *args)
 {
    bool should_load_game = false;
 #if defined(IS_SALAMANDER)
@@ -481,7 +481,7 @@ static int frontend_gx_parse_drive_list(void *data, bool load_content)
    file_list_t *list = (file_list_t*)data;
    enum msg_hash_enums enum_idx = load_content ?
       MENU_ENUM_LABEL_FILE_DETECT_CORE_LIST_PUSH_DIR :
-      MSG_UNKNOWN;
+      MENU_ENUM_LABEL_FILE_BROWSER_DIRECTORY;
 #ifdef HW_RVL
    menu_entries_append_enum(list,
          "sd:/",
@@ -525,11 +525,11 @@ static uint64_t frontend_gx_get_mem_total(void)
    return total;
 }
 
-static uint64_t frontend_gx_get_mem_used(void)
+static uint64_t frontend_gx_get_mem_free(void)
 {
-   uint64_t total = SYSMEM1_SIZE - SYS_GetArena1Size();
+   uint64_t total = SYSMEM1_SIZE - (SYSMEM1_SIZE - SYS_GetArena1Size());
 #if defined(HW_RVL) && !defined(IS_SALAMANDER)
-   total += gx_mem2_used();
+   total += (gx_mem2_total() - gx_mem2_used());
 #endif
    return total;
 }
@@ -555,7 +555,7 @@ frontend_ctx_driver_t frontend_ctx_gx = {
    NULL,                            /* get_powerstate */
    frontend_gx_parse_drive_list,
    frontend_gx_get_mem_total,
-   frontend_gx_get_mem_used,
+   frontend_gx_get_mem_free,
    NULL,                            /* install_signal_handler */
    NULL,                            /* get_sighandler_state */
    NULL,                            /* set_sighandler_state */
@@ -567,5 +567,7 @@ frontend_ctx_driver_t frontend_ctx_gx = {
    NULL,                            /* set_sustained_performance_mode */
    NULL,                            /* get_cpu_model_name */
    NULL,                            /* get_user_language */
+   NULL,                         /* is_narrator_running */
+   NULL,                         /* accessibility_speak */
    "gx",
 };

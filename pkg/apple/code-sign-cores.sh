@@ -16,12 +16,17 @@ fi
 
 ITEMS=""
 
-CORES_DIR="${PROJECT_DIR}/iOS/modules"
+if [ "$1" = "tvos" ]; then
+    CORES_DIR="${PROJECT_DIR}/tvOS/modules"
+else
+    CORES_DIR="${PROJECT_DIR}/iOS/modules"
+fi
+
 echo "Cores dir: ${CORES_DIR}"
 if [ -d "$CORES_DIR" ] ; then
     CORES=$(find "${CORES_DIR}" -depth -type d -name "*.framework" -or -name "*.dylib" -or -name "*.bundle" | sed -e "s/\(.*framework\)/\1\/Versions\/A\//")
     RESULT=$?
-    if [[ $RESULT != 0 ]] ; then
+    if [ "$RESULT" != 0 ] ; then
         exit 1
     fi
 
@@ -53,7 +58,7 @@ do
     echo "Signing '${ITEM}'"
     codesign --force --verbose --sign "${CODE_SIGN_IDENTITY_FOR_ITEMS}" "${ITEM}"
     RESULT=$?
-    if [[ $RESULT != 0 ]] ; then
+    if [ "$RESULT" != 0 ] ; then
         echo "Failed to sign '${ITEM}'."
         IFS=$SAVED_IFS
         exit 1

@@ -1,4 +1,4 @@
-/* Copyright  (C) 2010-2018 The RetroArch team
+/* Copyright  (C) 2010-2020 The RetroArch team
  *
  * ---------------------------------------------------------------------------------------
  * The following license statement only applies to this file (features_cpu.c).
@@ -39,7 +39,7 @@
 #include <windows.h>
 #endif
 
-#if defined(__CELLOS_LV2__)
+#if defined(__CELLOS_LV2__) || ( defined(__OpenBSD__) && defined(__powerpc__) )
 #ifndef _PPU_INTRINSICS_H
 #include <ppu_intrinsics.h>
 #endif
@@ -348,12 +348,12 @@ static unsigned char check_arm_cpu_feature(const char* feature)
    if (!fp)
       return 0;
 
-   while (filestream_gets(fp, line, sizeof(line)) != NULL)
+   while (filestream_gets(fp, line, sizeof(line)))
    {
       if (strncmp(line, "Features\t: ", 11))
          continue;
 
-      if (strstr(line + 11, feature) != NULL)
+      if (strstr(line + 11, feature))
          status = 1;
 
       break;
@@ -424,8 +424,7 @@ static void cpulist_parse(CpuList* list, char **buf, ssize_t length)
          q = end;
 
       /* Get first value */
-      p = parse_decimal(p, q, &start_value);
-      if (p == NULL)
+      if (!(p = parse_decimal(p, q, &start_value)))
          return;
 
       end_value = start_value;
@@ -435,8 +434,7 @@ static void cpulist_parse(CpuList* list, char **buf, ssize_t length)
        */
       if (p < q && *p == '-')
       {
-         p = parse_decimal(p+1, q, &end_value);
-         if (p == NULL)
+         if (!(p = parse_decimal(p+1, q, &end_value)))
             return;
       }
 
@@ -587,31 +585,13 @@ unsigned cpu_features_get_core_amount(void)
  **/
 uint64_t cpu_features_get(void)
 {
-   int flags[4];
-   int vendor_shuffle[3];
-   char vendor[13];
-   size_t len          = 0;
-   uint64_t cpu_flags  = 0;
    uint64_t cpu        = 0;
-   unsigned max_flag   = 0;
 #if defined(CPU_X86) && !defined(__MACH__)
    int vendor_is_intel = 0;
    const int avx_flags = (1 << 27) | (1 << 28);
 #endif
-
-   char buf[sizeof(" MMX MMXEXT SSE SSE2 SSE3 SSSE3 SS4 SSE4.2 AES AVX AVX2 NEON VMX VMX128 VFPU PS")];
-
-   memset(buf, 0, sizeof(buf));
-
-   (void)len;
-   (void)cpu_flags;
-   (void)flags;
-   (void)max_flag;
-   (void)vendor;
-   (void)vendor_shuffle;
-
 #if defined(__MACH__)
-   len     = sizeof(size_t);
+   size_t len          = sizeof(size_t);
    if (sysctlbyname("hw.optional.mmx", NULL, &len, NULL, 0) == 0)
    {
       cpu |= RETRO_SIMD_MMX;
@@ -673,8 +653,11 @@ uint64_t cpu_features_get(void)
    cpu |= RETRO_SIMD_SSE;
    cpu |= RETRO_SIMD_MMXEXT;
 #elif defined(CPU_X86)
-   (void)avx_flags;
-
+   unsigned max_flag   = 0;
+   int flags[4];
+   int vendor_shuffle[3];
+   char vendor[13];
+   uint64_t cpu_flags  = 0;
    x86_cpuid(0, flags);
    vendor_shuffle[0] = flags[1];
    vendor_shuffle[1] = flags[3];
@@ -805,26 +788,6 @@ uint64_t cpu_features_get(void)
 #elif defined(GEKKO)
    cpu |= RETRO_SIMD_PS;
 #endif
-
-   if (cpu & RETRO_SIMD_MMX)    strlcat(buf, " MMX", sizeof(buf));
-   if (cpu & RETRO_SIMD_MMXEXT) strlcat(buf, " MMXEXT", sizeof(buf));
-   if (cpu & RETRO_SIMD_SSE)    strlcat(buf, " SSE", sizeof(buf));
-   if (cpu & RETRO_SIMD_SSE2)   strlcat(buf, " SSE2", sizeof(buf));
-   if (cpu & RETRO_SIMD_SSE3)   strlcat(buf, " SSE3", sizeof(buf));
-   if (cpu & RETRO_SIMD_SSSE3)  strlcat(buf, " SSSE3", sizeof(buf));
-   if (cpu & RETRO_SIMD_SSE4)   strlcat(buf, " SSE4", sizeof(buf));
-   if (cpu & RETRO_SIMD_SSE42)  strlcat(buf, " SSE4.2", sizeof(buf));
-   if (cpu & RETRO_SIMD_AES)    strlcat(buf, " AES", sizeof(buf));
-   if (cpu & RETRO_SIMD_AVX)    strlcat(buf, " AVX", sizeof(buf));
-   if (cpu & RETRO_SIMD_AVX2)   strlcat(buf, " AVX2", sizeof(buf));
-   if (cpu & RETRO_SIMD_NEON)   strlcat(buf, " NEON", sizeof(buf));
-   if (cpu & RETRO_SIMD_VFPV3)  strlcat(buf, " VFPv3", sizeof(buf));
-   if (cpu & RETRO_SIMD_VFPV4)  strlcat(buf, " VFPv4", sizeof(buf));
-   if (cpu & RETRO_SIMD_VMX)    strlcat(buf, " VMX", sizeof(buf));
-   if (cpu & RETRO_SIMD_VMX128) strlcat(buf, " VMX128", sizeof(buf));
-   if (cpu & RETRO_SIMD_VFPU)   strlcat(buf, " VFPU", sizeof(buf));
-   if (cpu & RETRO_SIMD_PS)     strlcat(buf, " PS", sizeof(buf));
-   if (cpu & RETRO_SIMD_ASIMD)  strlcat(buf, " ASIMD", sizeof(buf));
 
    return cpu;
 }

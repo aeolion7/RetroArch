@@ -16,7 +16,7 @@ SHARE_DIR="${SHARE_DIR:-${PREFIX}/share}"
 # $2 = define
 # $3 = value
 add_define()
-{ eval "${1}_DEFINES=\"\${${1}_DEFINES} $2=$3\""; }
+{ 	eval "${1}_DEFINES=\"\${${1}_DEFINES} $2=$3\""; }
 
 # add_dirs:
 # $1 = INCLUDE or LIBRARY
@@ -28,6 +28,7 @@ add_dirs()
 		shift
 	done
 	eval "${ADD}_DIRS=\"\${${ADD}_DIRS# }\""
+	BUILD_DIRS="$INCLUDE_DIRS $LIBRARY_DIRS"
 }
 
 # check_compiler:
@@ -52,14 +53,15 @@ check_compiler()
 # $2 = USER_$2 [Enabled feature]
 # $3 = lib
 # $4 = feature
-# $5 = enable lib when true [checked only if non-empty]
+# $5 = enable lib when true, disable errors with 'user' [checked only if non-empty]
 check_enabled()
-{	setval="$(eval "printf %s \"\$HAVE_$2\"")"
+{	add_opt "$2"
+	setval="$(eval "printf %s \"\$HAVE_$2\"")"
 
 	for val in $(printf %s "$1"); do
 		tmpvar="$(eval "printf %s \"\$HAVE_$val\"")"
 		if [ "$tmpvar" != 'no' ]; then
-			if [ "$setval" != 'no' ] && [ "${5:-}" = 'true' ]; then
+			if [ "$setval" != 'no' ] && match "${5:-}" true user; then
 				eval "HAVE_$2=yes"
 			fi
 			return 0
@@ -71,41 +73,59 @@ check_enabled()
 	if [ "$tmpval" != 'yes' ]; then
 		if [ "$setval" != 'no' ]; then
 			eval "HAVE_$2=no"
-			if [ "${5:-}" != 'true' ]; then
+			if ! match "${5:-}" true user; then
 				die : "Notice: $4 disabled, $3 support will also be disabled."
 			fi
 		fi
 		return 0
 	fi
 
-	die 1 "Error: $4 disabled and forced to build with $3 support."
+	if [ "${5:-}" != 'user' ]; then
+		die 1 "Error: $4 disabled and forced to build with $3 support."
+	fi
 }
 
 # check_platform:
-# $1 = OS
+# $1 = OS ['OS' or 'OS OS2 OS3', $1 = name]
 # $2 = HAVE_$2
 # $3 = feature
-# $4 = enable feature when true [checked only if non-empty]
+# $4 = enable feature when 'true', disable errors with 'user' [checked only if non-empty]
 check_platform()
-{	tmpval="$(eval "printf %s \"\$HAVE_$2\"")"
+{	add_opt "$2"
+	tmpval="$(eval "printf %s \"\$HAVE_$2\"")"
 	[ "$tmpval" = 'no' ] && return 0
 
+	error=
+	newval=
 	setval="$(eval "printf %s \"\$USER_$2\"")"
 
-	if [ "$setval" = 'yes' ]; then
-		if { [ "$1" != "$OS" ] && [ "${4:-}" = 'true' ]; } ||
-				{ [ "$1" = "$OS" ] &&
-				[ "${4:-}" != 'true' ]; }; then
-			die 1 "Error: $3 not supported for $OS."
+	for platform in $(printf %s "$1"); do
+		if [ "$setval" = 'yes' ]; then
+			if [ "$error" != 'no' ] && [ "${4:-}" != 'user' ] &&
+					{ { [ "$platform" != "$OS" ] &&
+					match "${4:-}" true user; } ||
+					{ [ "$platform" = "$OS" ] &&
+					! match "${4:-}" true user; }; }; then
+				error='yes'
+			elif match "${4:-}" true user; then
+				error='no'
+			fi
+		elif [ "$platform" = "$OS" ]; then
+			if match "${4:-}" true user; then
+				newval=yes
+				break
+			else
+				newval=no
+			fi
+		elif match "${4:-}" true user; then
+			newval=auto
 		fi
-	elif [ "$1" = "$OS" ]; then
-		if [ "${4:-}" = 'true' ]; then
-			eval "HAVE_$2=yes"
-		else
-			eval "HAVE_$2=no"
-		fi
-	elif [ "${4:-}" = 'true' ]; then
-		eval "HAVE_$2="
+	done
+
+	if [ "${error}" = 'yes' ]; then
+		die 1 "Error: $3 not supported for $OS."
+	else
+		eval "HAVE_$2=\"${newval:-$tmpval}\""
 	fi
 }
 
@@ -120,7 +140,8 @@ check_platform()
 # $7 = include directory [checked only if non-empty]
 # $8 = critical error message [checked only if non-empty]
 check_lib()
-{	tmpval="$(eval "printf %s \"\$HAVE_$2\"")"
+{	add_opt "$2"
+	tmpval="$(eval "printf %s \"\$HAVE_$2\"")"
 	[ "$tmpval" = 'no' ] && return 0
 
 	check_compiler "$1" "$4"
@@ -137,42 +158,44 @@ check_lib()
 		printf %s\\n 'int main(void) { return 0; }' > "$TEMP_CODE"
 	fi
 
-	val="$2"
 	lib="${3% }"
 	include="${7:-}"
 	error="${8:-}"
 	answer='no'
-	printf %s "$MSG $lib"
-	eval "set -- $INCLUDE_DIRS $LIBRARY_DIRS $5 $FLAGS $LDFLAGS $lib"
-	"$COMPILER" -o "$TEMP_EXE" "$TEMP_CODE" "$@" >>config.log 2>&1 && answer='yes'
-	printf %s\\n " ... $answer"
+
+	printf %s "$MSG $lib ... "
+
+	$(printf %s "$COMPILER") -o "$TEMP_EXE" "$TEMP_CODE" \
+		$(printf %s "$BUILD_DIRS $5 $FLAGS $LDFLAGS $lib") \
+		>>config.log 2>&1 && answer='yes'
+
+	printf %s\\n "$answer"
 
 	if [ "$answer" = 'yes' ] && [ "$include" ]; then
 		answer='no'
-		eval "set -- $INCLUDES"
-		for dir do
+		for dir in $(printf %s "$INCLUDES"); do
 			[ "$answer" = 'yes' ] && break
-			printf %s "Checking existence of /$dir/$include"
+			printf %s "Checking existence of /$dir/$include ... "
 			if [ -d "/$dir/$include" ]; then
-				eval "${val}_CFLAGS=\"-I/$dir/$include\""
+				eval "${2}_CFLAGS=\"-I/$dir/$include\""
 				answer='yes'
 			fi
-			printf %s\\n " ... $answer"
+			printf %s\\n "$answer"
 		done
 	fi
 
-	eval "HAVE_$val=\"$answer\""
+	eval "HAVE_$2=\"$answer\""
 	rm -f -- "$TEMP_CODE" "$TEMP_EXE"
 
 	if [ "$answer" = 'no' ]; then
 		[ "$error" ] && die 1 "$error"
-		setval="$(eval "printf %s \"\$USER_$val\"")"
+		setval="$(eval "printf %s \"\$USER_$2\"")"
 		if [ "$setval" = 'yes' ]; then
 			die 1 "Forced to build with library $lib, but cannot locate. Exiting ..."
 		fi
 	else
-		eval "${val}_LIBS=\"$lib\""
-		PKG_CONF_USED="$PKG_CONF_USED $val"
+		eval "${2}_LIBS=\"$lib\""
+		PKG_CONF_USED="$PKG_CONF_USED $2"
 	fi
 
 	return 0
@@ -186,7 +209,8 @@ check_lib()
 # $4 = critical error message [checked only if non-empty]
 # $5 = force check_lib when true [checked only if non-empty, set by check_val]
 check_pkgconf()
-{	tmpval="$(eval "printf %s \"\$HAVE_$1\"")"
+{	add_opt "$1"
+	tmpval="$(eval "printf %s \"\$HAVE_$1\"")"
 	eval "TMP_$1=\$tmpval"
 	[ "$tmpval" = 'no' ] && return 0
 
@@ -203,66 +227,67 @@ check_pkgconf()
 		return 0
 	}
 
-	val="$1"
 	ver="${3:-0.0}"
 	err="${4:-}"
 	lib="${5:-}"
 	answer='no'
 	version='no'
 
-	eval "set -- ${2#* }"
-	for pkgnam do
+	for pkgnam in $(printf %s "${2#* }"); do
 		[ "$answer" = 'yes' ] && break
-		printf %s "$MSG $pkgnam$ECHOBUF"
-		eval "set -- $ver"
-		for pkgver do
+		printf %s "$MSG $pkgnam$ECHOBUF ... "
+		for pkgver in $(printf %s "$ver"); do
 			if "$PKG_CONF_PATH" --atleast-version="$pkgver" "$pkgnam"; then
 				answer='yes'
 				version="$("$PKG_CONF_PATH" --modversion "$pkgnam")"
-				eval "${val}_CFLAGS=\"$("$PKG_CONF_PATH" --cflags "$pkgnam")\""
-				eval "${val}_LIBS=\"$("$PKG_CONF_PATH" --libs "$pkgnam")\""
-				eval "${val}_VERSION=\"$pkgver\""
+				eval "${1}_CFLAGS=\"$("$PKG_CONF_PATH" --cflags "$pkgnam")\""
+				eval "${1}_LIBS=\"$("$PKG_CONF_PATH" --libs "$pkgnam")\""
+				eval "${1}_VERSION=\"$pkgver\""
 				break
 			fi
 		done
-		printf %s\\n " ... $version"
+		printf %s\\n "$version"
 	done
 
-	eval "HAVE_$val=\"$answer\""
+	eval "HAVE_$1=\"$answer\""
 
 	if [ "$answer" = 'no' ]; then
 		[ "$lib" != 'true' ] || return 0
 		[ "$err" ] && die 1 "$err"
-		setval="$(eval "printf %s \"\$USER_$val\"")"
+		setval="$(eval "printf %s \"\$USER_$1\"")"
 		if [ "$setval" = 'yes' ]; then
 			die 1 "Forced to build with package $pkg, but cannot locate. Exiting ..."
 		fi
 	else
-		PKG_CONF_USED="$PKG_CONF_USED $val"
+		PKG_CONF_USED="$PKG_CONF_USED $1"
 	fi
 }
 
 # check_header:
-# $1 = HAVE_$1
+# $1 = language
+# $2 = HAVE_$2
 # $@ = header files
 check_header()
-{	tmpval="$(eval "printf %s \"\$HAVE_$1\"")"
+{	add_opt "$2"
+	check_compiler "$1" ''
+	tmpval="$(eval "printf %s \"\$HAVE_$2\"")"
 	[ "$tmpval" = 'no' ] && return 0
 	rm -f -- "$TEMP_C"
-	val="$1"
-	header="$2"
-	shift
+	val="$2"
+	header="$3"
+	shift 2
 	for head do
 		CHECKHEADER="$head"
-		printf %s\\n "#include <$head>" >> "$TEMP_C"
+		printf %s\\n "#include <$head>" >> "$TEMP_CODE"
 	done
-	printf %s\\n "int main(void) { return 0; }" >> "$TEMP_C"
+	printf %s\\n "int main(void) { return 0; }" >> "$TEMP_CODE"
 	answer='no'
-	printf %s "Checking presence of header file $CHECKHEADER"
-	eval "set -- $CFLAGS $INCLUDE_DIRS"
-	"$CC" -o "$TEMP_EXE" "$TEMP_C" "$@" >>config.log 2>&1 && answer='yes'
+	printf %s "Checking presence of header file $CHECKHEADER ... "
+	$(printf %s "$COMPILER") -o "$TEMP_EXE" "$TEMP_CODE" \
+		$(printf %s "$BUILD_DIRS $FLAGS $LDFLAGS") >>config.log 2>&1 &&
+		answer='yes'
 	eval "HAVE_$val=\"$answer\""
-	printf %s\\n " ... $answer"
+	printf %s\\n "$answer"
 	rm -f -- "$TEMP_C" "$TEMP_EXE"
 	setval="$(eval "printf %s \"\$USER_$val\"")"
 	if [ "$setval" = 'yes' ] && [ "$answer" = 'no' ]; then
@@ -275,7 +300,8 @@ check_header()
 # $2 = macro name
 # $3 = header name [included only if non-empty]
 check_macro()
-{	tmpval="$(eval "printf %s \"\$HAVE_$1\"")"
+{	add_opt "$1"
+	tmpval="$(eval "printf %s \"\$HAVE_$1\"")"
 	[ "$tmpval" = 'no' ] && return 0
 	header_include=''
 	ECHOBUF=''
@@ -293,11 +319,12 @@ EOF
 	answer='no'
 	val="$1"
 	macro="$2"
-	printf %s "Checking presence of predefined macro $macro$ECHOBUF"
-	eval "set -- $CFLAGS $INCLUDE_DIRS"
-	"$CC" -o "$TEMP_EXE" "$TEMP_C" "$@" >>config.log 2>&1 && answer='yes'
+	printf %s "Checking presence of predefined macro $macro$ECHOBUF ... "
+	$(printf %s "$CC") -o "$TEMP_EXE" "$TEMP_C" \
+		$(printf %s "$BUILD_DIRS $CFLAGS $LDFLAGS") >>config.log 2>&1 &&
+		answer='yes'
 	eval "HAVE_$val=\"$answer\""
-	printf %s\\n " ... $answer"
+	printf %s\\n "$answer"
 	rm -f -- "$TEMP_C" "$TEMP_EXE"
 	setval="$(eval "printf %s \"\$USER_$val\"")"
 	if [ "$setval" = 'yes' ] && [ "$answer" = 'no' ]; then
@@ -311,16 +338,22 @@ EOF
 # $3 = switch
 # $4 = critical error message [checked only if non-empty]
 check_switch()
-{	check_compiler "$1" ''
+{	add_opt "$2"
+	check_compiler "$1" ''
 
 	printf %s\\n 'int main(void) { return 0; }' > "$TEMP_CODE"
 	answer='no'
-	printf %s "Checking for availability of switch $3 in $COMPILER"
-	"$COMPILER" -o "$TEMP_EXE" "$TEMP_CODE" "$3" >>config.log 2>&1 && answer='yes'
+	printf %s "Checking for availability of switch $3 in $COMPILER ... "
+	$(printf %s "$COMPILER") -o "$TEMP_EXE" "$TEMP_CODE" \
+		$(printf %s "$BUILD_DIRS $CFLAGS $3 -Werror $LDFLAGS") \
+		>>config.log 2>&1 && answer='yes'
 	eval "HAVE_$2=\"$answer\""
-	printf %s\\n " ... $answer"
+	printf %s\\n "$answer"
 	rm -f -- "$TEMP_CODE" "$TEMP_EXE"
-	if [ "$answer" = 'no' ] && [ "${4:-}" ]; then
+	if [ "$answer" = 'yes' ]; then
+		eval "${2}_CFLAGS=\"$3\""
+		PKG_CONF_USED="$PKG_CONF_USED $2"
+	elif [ "${4:-}" ]; then
 		die 1 "$4"
 	fi
 }
@@ -384,8 +417,7 @@ create_config_header()
 			shift
 		done
 
-		eval "set -- $CONFIG_DEFINES"
-		for VAR do
+		for VAR in $(printf %s "$CONFIG_DEFINES"); do
 			printf %s\\n "#define ${VAR%%=*} ${VAR#*=}"
 		done
 
@@ -458,8 +490,8 @@ create_config_make()
 			esac
 			shift
 		done
-		eval "set -- $MAKEFILE_DEFINES"
-		for VAR do
+
+		for VAR in $(printf %s "$MAKEFILE_DEFINES"); do
 			printf %s\\n "${VAR%%=*} = ${VAR#*=}"
 		done
 

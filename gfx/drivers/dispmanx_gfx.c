@@ -383,7 +383,7 @@ static void dispmanx_blank_console (struct dispmanx_video *_dispvars)
 }
 
 static void *dispmanx_gfx_init(const video_info_t *video,
-      const input_driver_t **input, void **input_data)
+      input_driver_t **input, void **input_data)
 {
    struct dispmanx_video *_dispvars = calloc(1, sizeof(struct dispmanx_video));
 
@@ -507,7 +507,7 @@ static void dispmanx_set_texture_frame(void *data, const void *frame, bool rgb32
       return;
 
    /* If menu is active in this frame but our menu surface is NULL, we allocate a new one.*/
-   if (_dispvars->menu_surface == NULL)
+   if (!_dispvars->menu_surface)
    {
       _dispvars->menu_width  = width;
       _dispvars->menu_height = height;
@@ -533,27 +533,11 @@ static void dispmanx_set_texture_frame(void *data, const void *frame, bool rgb32
    dispmanx_surface_update_async(frame, _dispvars->menu_surface);
 }
 
-static void dispmanx_gfx_set_nonblock_state(void *data, bool state)
-{
-   struct dispmanx_video *vid = data;
+static void dispmanx_gfx_set_nonblock_state(void *a, bool b,
+      bool c, unsigned d) { }
 
-   (void)data;
-   (void)vid;
-
-   /* TODO */
-}
-
-static bool dispmanx_gfx_alive(void *data)
-{
-   (void)data;
-   return true; /* always alive */
-}
-
-static bool dispmanx_gfx_focus(void *data)
-{
-   (void)data;
-   return true; /* fb device always has focus */
-}
+static bool dispmanx_gfx_alive(void *data) { return true; }
+static bool dispmanx_gfx_focus(void *data) { return true; }
 
 static void dispmanx_gfx_viewport_info(void *data, struct video_viewport *vp)
 {
@@ -586,36 +570,6 @@ static bool dispmanx_gfx_set_shader(void *data,
    return false;
 }
 
-static void dispmanx_set_aspect_ratio (void *data, unsigned aspect_ratio_idx)
-{
-   /* Due to RetroArch setting the data pointer to NULL internally
-    * on core change, data is going to be NULL here after we load
-    * a new core from the GUI, so we can't count on accessing it
-    * to store the aspect ratio we are going to use, so we tell RA
-    * to keep track of the new aspect ratio and we get it in gfx_frame()
-    * with video_driver_get_aspect_ratio() to find out if it has changed. */
-
-   switch (aspect_ratio_idx)
-   {
-      case ASPECT_RATIO_SQUARE:
-         video_driver_set_viewport_square_pixel();
-         break;
-
-      case ASPECT_RATIO_CORE:
-         video_driver_set_viewport_core();
-         break;
-
-      case ASPECT_RATIO_CONFIG:
-         video_driver_set_viewport_config();
-         break;
-
-      default:
-         break;
-   }
-
-   video_driver_set_aspect_ratio_value(aspectratio_lut[aspect_ratio_idx].value);
-}
-
 static uint32_t dispmanx_get_flags(void *data)
 {
    uint32_t             flags = 0;
@@ -635,7 +589,7 @@ static const video_poke_interface_t dispmanx_poke_interface = {
    NULL, /* get_video_output_next */
    NULL, /* get_current_framebuffer */
    NULL, /* get_proc_address */
-   dispmanx_set_aspect_ratio,
+   NULL, /* set_aspect_ratio */
    NULL, /* dispmanx_apply_state_changes */
    dispmanx_set_texture_frame,
    dispmanx_set_texture_enable,

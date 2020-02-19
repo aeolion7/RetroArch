@@ -1,6 +1,6 @@
 /* RetroArch - A frontend for libretro.
  *  Copyright (C) 2011-2017 - Daniel De Matteis
- *  Copyright (C) 2018      - Brad Parker
+ *  Copyright (C) 2016-2019 - Brad Parker
  *
  * RetroArch is free software: you can redistribute it and/or modify it under the terms
  * of the GNU General Public License as published by the Free Software Found-
@@ -41,7 +41,6 @@
 #include "ui_qt_load_core_window.h"
 #include "ui_qt_themes.h"
 #include "gridview.h"
-#include "shaderparamsdialog.h"
 #include "coreoptionsdialog.h"
 #include "filedropwidget.h"
 #include "coreinfodialog.h"
@@ -50,6 +49,10 @@
 
 #ifndef CXX_BUILD
 extern "C" {
+#endif
+
+#ifdef HAVE_CONFIG_H
+#include "../../../config.h"
 #endif
 
 #include "../../../version.h"
@@ -86,14 +89,11 @@ extern "C" {
 }
 #endif
 
+#include "shaderparamsdialog.h"
 #include "../../../AUTHORS.h"
 
 #define TIMER_MSEC 1000 /* periodic timer for gathering statistics */
 #define STATUS_MSG_THROTTLE_MSEC 250
-
-#ifndef COLLECTION_SIZE
-#define COLLECTION_SIZE 99999
-#endif
 
 #define GENERIC_FOLDER_ICON "/xmb/dot-art/png/folder.png"
 #define HIRAGANA_START 0x3041U
@@ -286,7 +286,7 @@ MainWindow::MainWindow(QWidget *parent) :
    ,m_playlistViews(new FileDropWidget(this))
    ,m_searchWidget(new QWidget(this))
    ,m_searchLineEdit(new QLineEdit(this))
-   ,m_searchDock(new QDockWidget(msg_hash_to_str(MENU_ENUM_LABEL_VALUE_QT_MENU_EDIT_SEARCH), this))
+   ,m_searchDock(new QDockWidget(msg_hash_to_str(MENU_ENUM_LABEL_VALUE_SEARCH), this))
    ,m_playlistFiles()
    ,m_launchWithComboBox(new QComboBox(this))
    ,m_startCorePushButton(new QToolButton(this))
@@ -327,7 +327,9 @@ MainWindow::MainWindow(QWidget *parent) :
    ,m_allPlaylistsGridMaxCount(0)
    ,m_playlistEntryDialog(NULL)
    ,m_statusMessageElapsedTimer()
+#if defined(HAVE_CG) || defined(HAVE_GLSL) || defined(HAVE_SLANG) || defined(HAVE_HLSL)
    ,m_shaderParamsDialog(new ShaderParamsDialog())
+#endif
    ,m_coreOptionsDialog(new CoreOptionsDialog())
    ,m_networkManager(new QNetworkAccessManager(this))
    ,m_updateProgressDialog(new QProgressDialog())
@@ -357,7 +359,10 @@ MainWindow::MainWindow(QWidget *parent) :
    ,m_itemsCountLabel(new QLabel(this))
 {
    settings_t                   *settings = config_get_ptr();
-   QDir playlistDir(settings->paths.directory_playlist);
+   const char *path_dir_playlist          = settings->paths.directory_playlist;
+   const char *path_dir_assets            = settings->paths.directory_assets;
+   const char *path_dir_menu_content      = settings->paths.directory_menu_content;
+   QDir playlistDir(path_dir_playlist);
    QString                      configDir = QFileInfo(path_get(RARCH_PATH_CONFIG)).dir().absolutePath();
    QToolButton   *searchResetButton       = NULL;
    QHBoxLayout   *zoomLayout              = new QHBoxLayout();
@@ -500,9 +505,9 @@ MainWindow::MainWindow(QWidget *parent) :
 
    m_logWidget->setObjectName("logWidget");
 
-   m_folderIcon = QIcon(QString(settings->paths.directory_assets) + GENERIC_FOLDER_ICON);
-   m_imageFormats = QVector<QByteArray>::fromList(QImageReader::supportedImageFormats());
-   m_defaultStyle = QApplication::style();
+   m_folderIcon     = QIcon(QString(path_dir_assets) + GENERIC_FOLDER_ICON);
+   m_imageFormats   = QVector<QByteArray>::fromList(QImageReader::supportedImageFormats());
+   m_defaultStyle   = QApplication::style();
    m_defaultPalette = QApplication::palette();
 
    /* ViewOptionsDialog needs m_settings set before it's constructed */
@@ -632,7 +637,7 @@ MainWindow::MainWindow(QWidget *parent) :
    connect(m_dirModel, SIGNAL(directoryLoaded(const QString&)), this, SLOT(onFileSystemDirLoaded(const QString&)));
    connect(m_fileModel, SIGNAL(directoryLoaded(const QString&)), this, SLOT(onFileBrowserTableDirLoaded(const QString&)));
 
-   m_dirTree->setCurrentIndex(m_dirModel->index(settings->paths.directory_menu_content));
+   m_dirTree->setCurrentIndex(m_dirModel->index(path_dir_menu_content));
    m_dirTree->scrollTo(m_dirTree->currentIndex(), QAbstractItemView::PositionAtTop);
    m_dirTree->expand(m_dirTree->currentIndex());
 
@@ -672,7 +677,9 @@ MainWindow::MainWindow(QWidget *parent) :
    connect(this, SIGNAL(gotLogMessage(const QString&)), this, SLOT(onGotLogMessage(const QString&)), Qt::AutoConnection);
    connect(this, SIGNAL(gotStatusMessage(QString,unsigned,unsigned,bool)), this, SLOT(onGotStatusMessage(QString,unsigned,unsigned,bool)), Qt::AutoConnection);
    connect(this, SIGNAL(gotReloadPlaylists()), this, SLOT(onGotReloadPlaylists()), Qt::AutoConnection);
+#if defined(HAVE_CG) || defined(HAVE_GLSL) || defined(HAVE_SLANG) || defined(HAVE_HLSL)
    connect(this, SIGNAL(gotReloadShaderParams()), this, SLOT(onGotReloadShaderParams()), Qt::AutoConnection);
+#endif
    connect(this, SIGNAL(gotReloadCoreOptions()), this, SLOT(onGotReloadCoreOptions()), Qt::AutoConnection);
 
    /* these are always queued */
@@ -1032,14 +1039,17 @@ bool MainWindow::showMessageBox(QString msg, MessageBoxType msgType, Qt::WindowM
 void MainWindow::onFileBrowserTreeContextMenuRequested(const QPoint&)
 {
 #ifdef HAVE_LIBRETRODB
+   QDir dir;
+   QByteArray dirArray;
    QPointer<QAction> action;
    QList<QAction*> actions;
    QScopedPointer<QAction> scanAction;
-   QDir dir;
-   QString currentDirString = QDir::toNativeSeparators(m_dirModel->filePath(m_dirTree->currentIndex()));
-   settings_t *settings = config_get_ptr();
-   QByteArray dirArray;
-   const char *fullpath = NULL;
+   QString currentDirString      = QDir::toNativeSeparators(
+         m_dirModel->filePath(m_dirTree->currentIndex()));
+   settings_t *settings          = config_get_ptr();
+   const char *fullpath          = NULL;
+   const char *path_dir_playlist = settings->paths.directory_playlist;
+   const char *path_content_db   = settings->paths.path_content_database;
 
    if (currentDirString.isEmpty())
       return;
@@ -1063,15 +1073,16 @@ void MainWindow::onFileBrowserTreeContextMenuRequested(const QPoint&)
    fullpath = dirArray.constData();
 
    task_push_dbscan(
-         settings->paths.directory_playlist,
-         settings->paths.path_content_database,
+         path_dir_playlist,
+         path_content_db,
          fullpath, true,
          m_settings->value("show_hidden_files", true).toBool(),
          scan_finished_handler);
 #endif
 }
 
-void MainWindow::showStatusMessage(QString msg, unsigned priority, unsigned duration, bool flush)
+void MainWindow::showStatusMessage(QString msg,
+      unsigned priority, unsigned duration, bool flush)
 {
    emit gotStatusMessage(msg, priority, duration, flush);
 }
@@ -1109,17 +1120,29 @@ void MainWindow::onGotStatusMessage(QString msg, unsigned priority, unsigned dur
 
 void MainWindow::deferReloadShaderParams()
 {
+#if defined(HAVE_CG) || defined(HAVE_GLSL) || defined(HAVE_SLANG) || defined(HAVE_HLSL)
    emit gotReloadShaderParams();
+#endif
 }
 
 void MainWindow::onShaderParamsClicked()
 {
+#if defined(HAVE_CG) || defined(HAVE_GLSL) || defined(HAVE_SLANG) || defined(HAVE_HLSL)
    if (!m_shaderParamsDialog)
       return;
 
    m_shaderParamsDialog->show();
 
    onGotReloadShaderParams();
+#endif
+}
+
+void MainWindow::onGotReloadShaderParams()
+{
+#if defined(HAVE_CG) || defined(HAVE_GLSL) || defined(HAVE_SLANG) || defined(HAVE_HLSL)
+   if (m_shaderParamsDialog && m_shaderParamsDialog->isVisible())
+      m_shaderParamsDialog->reload();
+#endif
 }
 
 void MainWindow::onCoreOptionsClicked()
@@ -1130,12 +1153,6 @@ void MainWindow::onCoreOptionsClicked()
    m_coreOptionsDialog->show();
 
    onGotReloadCoreOptions();
-}
-
-void MainWindow::onGotReloadShaderParams()
-{
-   if (m_shaderParamsDialog && m_shaderParamsDialog->isVisible())
-      m_shaderParamsDialog->reload();
 }
 
 void MainWindow::onGotReloadCoreOptions()
@@ -2035,7 +2052,7 @@ void MainWindow::setCoreActions()
             coreName = "<n/a>";
          else
          {
-            const char *detect_str = file_path_str(FILE_PATH_DETECT);
+            const char *detect_str = "DETECT";
 
             if (coreName != detect_str)
             {
@@ -2374,9 +2391,10 @@ void MainWindow::renamePlaylistItem(QListWidgetItem *item, QString newName)
    QFileInfo info;
    QFileInfo playlistInfo;
    QString playlistPath;
-   settings_t *settings = config_get_ptr();
-   bool specialPlaylist = false;
-   QDir playlistDir(settings->paths.directory_playlist);
+   bool specialPlaylist          = false;
+   settings_t *settings          = config_get_ptr();
+   const char *path_dir_playlist = settings->paths.directory_playlist;
+   QDir playlistDir(path_dir_playlist);
 
    if (!item)
       return;
@@ -2395,12 +2413,15 @@ void MainWindow::renamePlaylistItem(QListWidgetItem *item, QString newName)
 
    if (specialPlaylist)
    {
-      /* special playlists shouldn't be editable already, but just in case, set the old name back and early return if they rename it */
+      /* special playlists shouldn't be editable already, 
+       * but just in case, set the old name back and 
+       * early return if they rename it */
       item->setText(oldName);
       return;
    }
 
-   /* block this signal because setData() would trigger an infinite loop here */
+   /* block this signal because setData() would trigger 
+    * an infinite loop here */
    disconnect(m_listWidget, SIGNAL(itemChanged(QListWidgetItem*)), this, SLOT(onCurrentListItemDataChanged(QListWidgetItem*)));
 
    oldPath = item->data(Qt::UserRole).toString();
@@ -2414,10 +2435,8 @@ void MainWindow::renamePlaylistItem(QListWidgetItem *item, QString newName)
 
    /* absolutePath() will always use / even on Windows */
    if (newPath.at(newPath.count() - 1) != '/')
-   {
       /* add trailing slash if the path doesn't have one */
       newPath += '/';
-   }
 
    newPath += newName + "." + extension;
 
@@ -3013,6 +3032,7 @@ int MainWindow::onExtractArchive(QString path, QString extractionDir, QString te
    const char *dir               = dirArray.constData();
    struct string_list *file_list = file_archive_get_file_list(file, NULL);
    bool returnerr                = true;
+   retro_task_t *decompress_task = NULL;
 
    if (!file_list || file_list->size == 0)
    {
@@ -3069,9 +3089,12 @@ int MainWindow::onExtractArchive(QString path, QString extractionDir, QString te
    m_updateProgressDialog->setCancelButtonText(QString());
    m_updateProgressDialog->show();
 
-   if (!task_push_decompress(file, dir,
-            NULL, NULL, NULL,
-            cb, this, NULL))
+   decompress_task = (retro_task_t*)task_push_decompress(
+         file, dir,
+         NULL, NULL, NULL,
+         cb, this, NULL, false);
+
+   if (!decompress_task)
    {
       m_updateProgressDialog->cancel();
       return -1;

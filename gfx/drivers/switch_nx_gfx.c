@@ -174,7 +174,7 @@ static void clear_screen(switch_video_t *sw)
 }
 
 static void *switch_init(const video_info_t *video,
-                         const input_driver_t **input, void **input_data)
+      input_driver_t **input, void **input_data)
 {
     void  *switchinput = NULL;
     switch_video_t *sw = (switch_video_t *)calloc(1, sizeof(*sw));
@@ -186,17 +186,16 @@ static void *switch_init(const video_info_t *video,
    framebufferCreate(&sw->fb, sw->win, 1280, 720, PIXEL_FORMAT_RGBA_8888, 2);
    framebufferMakeLinear(&sw->fb);
 
-    printf("loading switch gfx driver, width: %d, height: %d threaded: %d smooth %d\n", video->width, video->height, video->is_threaded, video->smooth);
-    sw->vp.x = 0;
-    sw->vp.y = 0;
-    sw->vp.width = sw->o_width = video->width;
-    sw->vp.height = sw->o_height = video->height;
+    sw->vp.x            = 0;
+    sw->vp.y            = 0;
+    sw->vp.width        = sw->o_width = video->width;
+    sw->vp.height       = sw->o_height = video->height;
     sw->overlay_enabled = false;
-    sw->overlay = NULL;
-    sw->in_menu = false;
+    sw->overlay         = NULL;
+    sw->in_menu         = false;
 
-    sw->vp.full_width = 1280;
-    sw->vp.full_height = 720;
+    sw->vp.full_width   = 1280;
+    sw->vp.full_height  = 720;
 
     /* Sanity check */
     sw->vp.width = MIN(sw->vp.width, sw->vp.full_width);
@@ -220,9 +219,11 @@ static void *switch_init(const video_info_t *video,
         *input_data = switchinput;
     }
 
-    font_driver_init_osd(sw, false,
-                         video->is_threaded,
-                         FONT_DRIVER_RENDER_SWITCH);
+    font_driver_init_osd(sw,
+          video,
+          false,
+          video->is_threaded,
+          FONT_DRIVER_RENDER_SWITCH);
 
     clear_screen(sw);
 
@@ -253,14 +254,6 @@ static void switch_update_viewport(switch_video_t *sw,
     }
 
     desired_aspect = video_driver_get_aspect_ratio();
-
-    /* We crash if >1.0f */
-    printf("[Video] Aspect: %f\n", desired_aspect);
-    /*if (desired_aspect > 1.8f)
-            desired_aspect = 1.7778f;
-
-      if (desired_aspect < 1.2f && desired_aspect != 0.0f)
-            desired_aspect = 1.0f;*/
 
     if (settings->bools.video_scale_integer)
     {
@@ -319,54 +312,43 @@ static void switch_update_viewport(switch_video_t *sw,
 
 static void switch_set_aspect_ratio(void *data, unsigned aspect_ratio_idx)
 {
-    switch_video_t *sw = (switch_video_t *)data;
+    settings_t *settings = config_get_ptr();
+    switch_video_t *sw   = (switch_video_t *)data;
 
     if (!sw)
         return;
 
-    sw->keep_aspect = true;
-    sw->o_size = false;
-
-    settings_t *settings = config_get_ptr();
+    sw->keep_aspect      = true;
+    sw->o_size           = false;
 
     switch (aspect_ratio_idx)
     {
-    case ASPECT_RATIO_SQUARE:
-        video_driver_set_viewport_square_pixel();
-        break;
+       case ASPECT_RATIO_CORE:
+          sw->o_size      = true;
+          sw->keep_aspect = false;
+          break;
 
-    case ASPECT_RATIO_CORE:
-        video_driver_set_viewport_core();
-        sw->o_size = true;
-        sw->keep_aspect = false;
-        break;
+       case ASPECT_RATIO_CUSTOM:
+          if (settings->bools.video_scale_integer)
+          {
+             video_driver_set_viewport_core();
+             sw->o_size      = true;
+             sw->keep_aspect = false;
+          }
+          break;
 
-    case ASPECT_RATIO_CONFIG:
-        video_driver_set_viewport_config();
-        break;
-
-    case ASPECT_RATIO_CUSTOM:
-        if (settings->bools.video_scale_integer)
-        {
-            video_driver_set_viewport_core();
-            sw->o_size = true;
-            sw->keep_aspect = false;
-        }
-        break;
-
-    default:
-        break;
+       default:
+          break;
     }
 
-    video_driver_set_aspect_ratio_value(aspectratio_lut[aspect_ratio_idx].value);
 
     sw->should_resize = true;
 }
 
 static bool switch_frame(void *data, const void *frame,
-                         unsigned width, unsigned height,
-                         uint64_t frame_count, unsigned pitch,
-                         const char *msg, video_frame_info_t *video_info)
+      unsigned width, unsigned height,
+      uint64_t frame_count, unsigned pitch,
+      const char *msg, video_frame_info_t *video_info)
 {
     switch_video_t   *sw = data;
     uint32_t *out_buffer = NULL;
@@ -382,23 +364,24 @@ static bool switch_frame(void *data, const void *frame,
             return true;
     }
 
-    if (sw->should_resize || width != sw->last_width || height != sw->last_height)
+    if (  sw->should_resize || 
+          width  != sw->last_width || 
+          height != sw->last_height)
     {
-        printf("[Video] Requesting new size: width %i height %i\n", width, height);
-        printf("[Video] fw: %i fh: %i w: %i h: %i x: %i y: %i\n", sw->vp.full_width, sw->vp.full_height, sw->vp.width, sw->vp.height, sw->vp.x, sw->vp.y);
         switch_update_viewport(sw, video_info);
-        printf("[Video] fw: %i fh: %i w: %i h: %i x: %i y: %i\n", sw->vp.full_width, sw->vp.full_height, sw->vp.width, sw->vp.height, sw->vp.x, sw->vp.y);
 
         /* Sanity check */
-        sw->vp.width = MIN(sw->vp.width, sw->vp.full_width);
+        sw->vp.width  = MIN(sw->vp.width, sw->vp.full_width);
         sw->vp.height = MIN(sw->vp.height, sw->vp.full_height);
 
         scaler_ctx_gen_reset(&sw->scaler);
 
-        sw->scaler.in_width = width;
+        sw->scaler.in_width  = width;
         sw->scaler.in_height = height;
         sw->scaler.in_stride = pitch;
-        sw->scaler.in_fmt = sw->rgb32 ? SCALER_FMT_ARGB8888 : SCALER_FMT_RGB565;
+        sw->scaler.in_fmt    = sw->rgb32 
+           ? SCALER_FMT_ARGB8888 
+           : SCALER_FMT_RGB565;
 
         if (!sw->smooth)
         {
@@ -429,10 +412,7 @@ static bool switch_frame(void *data, const void *frame,
         sw->scaler.scaler_type = SCALER_TYPE_POINT;
 
         if (!scaler_ctx_gen_filter(&sw->scaler))
-        {
-            printf("failed to generate scaler for main image\n");
             return false;
-        }
 
         sw->last_width = width;
         sw->last_height = height;
@@ -497,19 +477,19 @@ static bool switch_frame(void *data, const void *frame,
         struct font_params *osd_params = (struct font_params *)&video_info->osd_stat_params;
 
         if (osd_params)
-            font_driver_render_msg(video_info, NULL, video_info->stat_text,
-                                   (const struct font_params *)&video_info->osd_stat_params);
+            font_driver_render_msg(sw, video_info, video_info->stat_text,
+                  (const struct font_params *)&video_info->osd_stat_params, NULL);
     }
 
     if (msg)
-        font_driver_render_msg(video_info, NULL, msg, NULL);
+        font_driver_render_msg(sw, video_info, msg, NULL, NULL);
 
    framebufferEnd(&sw->fb);
 
     return true;
 }
 
-static void switch_set_nonblock_state(void *data, bool toggle)
+static void switch_set_nonblock_state(void *data, bool toggle, bool c, unsigned d)
 {
     switch_video_t *sw = data;
     sw->vsync = !toggle;
@@ -591,15 +571,12 @@ static void switch_set_texture_frame(
         struct scaler_ctx *sctx = NULL;
 
         if (sw->menu_texture.pixels)
-            realloc(sw->menu_texture.pixels, sz);
+            sw->menu_texture.pixels = realloc(sw->menu_texture.pixels, sz);
         else
             sw->menu_texture.pixels = malloc(sz);
 
         if (!sw->menu_texture.pixels)
-        {
-            printf("failed to allocate buffer for menu texture\n");
             return;
-        }
 
         xsf = 1280 / width;
         ysf = 720 / height;
@@ -628,10 +605,7 @@ static void switch_set_texture_frame(
         sctx->scaler_type       = SCALER_TYPE_POINT;
 
         if (!scaler_ctx_gen_filter(sctx))
-        {
-            printf("failed to generate scaler for menu texture\n");
             return;
-        }
     }
 
     memcpy(sw->menu_texture.pixels, frame, sz);
@@ -656,22 +630,9 @@ static void switch_set_texture_enable(void *data, bool enable, bool full_screen)
     sw->menu_texture.fullscreen = full_screen;
 }
 
-static void switch_set_osd_msg(void *data,
-            video_frame_info_t *video_info,
-            const char *msg,
-            const void *params, void *font)
-{
-    switch_video_t *sw = (switch_video_t *)data;
-
-    if (sw)
-        font_driver_render_msg(video_info, font, msg, params);
-}
-
 #ifdef HAVE_OVERLAY
 static void switch_overlay_enable(void *data, bool state)
 {
-    printf("[Video] Enabled Overlay\n");
-
     switch_video_t *swa = (switch_video_t *)data;
 
     if (!swa)
@@ -761,7 +722,7 @@ static const video_poke_interface_t switch_poke_interface = {
     switch_apply_state_changes, /* apply_state_changes */
     switch_set_texture_frame,
     switch_set_texture_enable,
-    switch_set_osd_msg,
+    font_driver_render_msg,
     NULL, /* show_mouse */
     NULL, /* grab_mouse_toggle */
     NULL, /* get_current_shader */

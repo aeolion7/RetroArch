@@ -1,6 +1,7 @@
 /*  RetroArch - A frontend for libretro.
  *  Copyright (C) 2010-2014 - Hans-Kristian Arntzen
  *  Copyright (C) 2011-2017 - Daniel De Matteis
+ *  Copyright (C) 2016-2019 - Brad Parker
  *
  *  RetroArch is free software: you can redistribute it and/or modify it under the terms
  *  of the GNU General Public License as published by the Free Software Found-
@@ -91,11 +92,11 @@ bool win32_suppress_screensaver(void *data, bool enable);
 bool win32_get_metrics(void *data,
 	enum display_metric_types type, float *value);
 
-void win32_show_cursor(bool state);
+void win32_show_cursor(void *data, bool state);
 
 HWND win32_get_window(void);
 
-bool win32_has_focus(void);
+bool win32_has_focus(void *data);
 
 void win32_check_window(bool *quit,
       bool *resize, unsigned *width, unsigned *height);
@@ -118,8 +119,6 @@ void win32_destroy_window(void);
 
 bool win32_taskbar_is_created(void);
 
-void win32_set_taskbar_created(bool created);
-
 float win32_get_refresh_rate(void *data);
 
 #if defined(HAVE_D3D8) || defined(HAVE_D3D9) || defined (HAVE_D3D10) || defined (HAVE_D3D11) || defined (HAVE_D3D12)
@@ -139,9 +138,9 @@ LRESULT CALLBACK WndProcGDI(HWND hwnd, UINT message,
 BOOL IsIconic(HWND hwnd);
 #endif
 
-LRESULT win32_menu_loop(HWND owner, WPARAM wparam);
-
 bool win32_load_content_from_gui(const char *szFilename);
+
+void win32_setup_pixel_format(HDC hdc, bool supports_gl);
 
 RETRO_END_DECLS
 

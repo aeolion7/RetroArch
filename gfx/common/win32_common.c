@@ -38,7 +38,11 @@
 #endif
 
 #include "win32_common.h"
+
+#ifdef HAVE_GDI
 #include "gdi_common.h"
+#endif
+
 #include "../../frontend/frontend_driver.h"
 #include "../../configuration.h"
 #include "../../verbosity.h"
@@ -53,7 +57,6 @@
 
 #include <commdlg.h>
 #include <dbt.h>
-#include "../../input/input_driver.h"
 #include "../../input/input_keymaps.h"
 #include "../video_thread_wrapper.h"
 #include "../video_display_server.h"
@@ -86,6 +89,28 @@
 #define EDS_ROTATEDMODE 4
 #endif
 
+/* These are defined in later SDKs, thus ifdeffed. */
+
+#ifndef WM_MOUSEHWHEEL
+#define WM_MOUSEHWHEEL                  0x20e
+#endif
+
+#ifndef WM_MOUSEWHEEL
+#define WM_MOUSEWHEEL                   0x020A
+#endif
+
+#ifndef WM_POINTERUPDATE
+#define WM_POINTERUPDATE                0x0245
+#endif
+
+#ifndef WM_POINTERDOWN
+#define WM_POINTERDOWN                  0x0246
+#endif
+
+#ifndef WM_POINTERUP
+#define WM_POINTERUP                    0x0247
+#endif
+
 const GUID GUID_DEVINTERFACE_HID = { 0x4d1e55b2, 0xf16f, 0x11Cf, { 0x88, 0xcb, 0x00, 0x11, 0x11, 0x00, 0x00, 0x30 } };
 #if defined(_WIN32_WINNT) && _WIN32_WINNT >= 0x501
 static HDEVNOTIFY notification_handler;
@@ -94,15 +119,11 @@ static HDEVNOTIFY notification_handler;
 #ifdef HAVE_DINPUT
 extern bool dinput_handle_message(void *dinput, UINT message,
       WPARAM wParam, LPARAM lParam);
+#ifdef HAVE_GDI
 extern void *dinput_gdi;
+#endif
 extern void *dinput_wgl;
 extern void *dinput;
-#endif
-
-#if defined(HAVE_XINPUT) && !defined(HAVE_DINPUT)
-#ifndef MAX_PADS
-#define MAX_PADS 4
-#endif
 #endif
 
 typedef struct DISPLAYCONFIG_RATIONAL_CUSTOM {
@@ -204,7 +225,7 @@ typedef LONG (WINAPI *GETDISPLAYCONFIGBUFFERSIZES)(UINT32, UINT32*, UINT32*);
 static bool g_win32_resized         = false;
 bool g_win32_restore_desktop        = false;
 static bool doubleclick_on_titlebar = false;
-static bool g_taskbar_is_created    = false;
+static bool taskbar_is_created      = false;
 bool g_win32_inited                 = false;
 static bool g_win32_quit            = false;
 
@@ -274,12 +295,7 @@ static HMONITOR win32_monitor_all[MAX_MONITORS];
 
 bool win32_taskbar_is_created(void)
 {
-   return g_taskbar_is_created;
-}
-
-void win32_set_taskbar_created(bool created)
-{
-   g_taskbar_is_created = created;
+   return taskbar_is_created;
 }
 
 bool doubleclick_on_titlebar_pressed(void)
@@ -292,7 +308,8 @@ void unset_doubleclick_on_titlebar(void)
    doubleclick_on_titlebar = false;
 }
 
-INT_PTR_COMPAT CALLBACK PickCoreProc(HWND hDlg, UINT message,
+static INT_PTR_COMPAT CALLBACK PickCoreProc(
+      HWND hDlg, UINT message,
         WPARAM wParam, LPARAM lParam)
 {
    size_t list_size;
@@ -460,9 +477,7 @@ bool win32_load_content_from_gui(const char *szFilename)
       (const char*)szFilename, &core_info, &list_size);
 
    if (!list_size)
-   {
       return false;
-   }
 
    path_set(RARCH_PATH_CONTENT, szFilename);
 
@@ -507,9 +522,10 @@ bool win32_load_content_from_gui(const char *szFilename)
    {
       bool            okay = false;
       settings_t *settings = config_get_ptr();
+      bool video_is_fs     = settings->bools.video_fullscreen;
 
       /* Fullscreen: Show mouse cursor for dialog */
-      if (settings->bools.video_fullscreen)
+      if (video_is_fs)
          video_driver_show_mouse();
 
       /* Pick one core that could be compatible, ew */
@@ -522,7 +538,7 @@ bool win32_load_content_from_gui(const char *szFilename)
       }
 
       /* Fullscreen: Hide mouse cursor after dialog */
-      if (settings->bools.video_fullscreen)
+      if (video_is_fs)
          video_driver_hide_mouse();
       return okay;
    }
@@ -559,103 +575,6 @@ static bool win32_drag_query_file(HWND hwnd, WPARAM wparam)
    return false;
 }
 
-#ifndef _XBOX
-static LRESULT win32_handle_keyboard_event(HWND hwnd, UINT message,
-      WPARAM wparam, LPARAM lparam)
-{
-   uint16_t mod          = 0;
-
-   if (GetKeyState(VK_SHIFT)   & 0x80)
-      mod |= RETROKMOD_SHIFT;
-   if (GetKeyState(VK_CONTROL) & 0x80)
-      mod |=  RETROKMOD_CTRL;
-   if (GetKeyState(VK_MENU)    & 0x80)
-      mod |=  RETROKMOD_ALT;
-   if (GetKeyState(VK_CAPITAL) & 0x81)
-      mod |= RETROKMOD_CAPSLOCK;
-   if (GetKeyState(VK_SCROLL)  & 0x81)
-      mod |= RETROKMOD_SCROLLOCK;
-   if ((GetKeyState(VK_LWIN) | GetKeyState(VK_RWIN)) & 0x80)
-      mod |= RETROKMOD_META;
-
-   switch (message)
-   {
-      /* Seems to be hard to synchronize
-       * WM_CHAR and WM_KEYDOWN properly.
-       */
-      case WM_CHAR:
-         input_keyboard_event(true, RETROK_UNKNOWN, wparam, mod,
-               RETRO_DEVICE_KEYBOARD);
-         return TRUE;
-
-      case WM_KEYUP:
-      case WM_SYSKEYUP:
-      case WM_KEYDOWN:
-      case WM_SYSKEYDOWN:
-         {
-            unsigned keycode      = 0;
-            bool keydown          = true;
-            unsigned keysym       = (lparam >> 16) & 0xff;
-#if _WIN32_WINNT >= 0x0501 /* XP */
-            settings_t *settings  = config_get_ptr();
-            if (settings && string_is_equal(settings->arrays.input_driver, "raw"))
-               keysym             = (unsigned)wparam;
-            else
-#endif
-#ifdef HAVE_DINPUT
-            {
-               /* extended keys will map to dinput if the high bit is set */
-               if (input_get_ptr() == &input_dinput && (lparam >> 24 & 0x1))
-                  keysym |= 0x80;
-            }
-#else
-            {
-               /* fix key binding issues on winraw when DirectInput is not available */
-            }
-#endif
-            /* Key released? */
-            if (message == WM_KEYUP || message == WM_SYSKEYUP)
-               keydown            = false;
-
-            keycode = input_keymaps_translate_keysym_to_rk(keysym);
-
-            input_keyboard_event(keydown, keycode,
-                  0, mod, RETRO_DEVICE_KEYBOARD);
-
-            if (message != WM_SYSKEYDOWN)
-               return 0;
-
-            if (
-                  wparam == VK_F10  ||
-                  wparam == VK_MENU ||
-                  wparam == VK_RSHIFT
-               )
-               return 0;
-         }
-         break;
-   }
-
-   return DefWindowProc(hwnd, message, wparam, lparam);
-}
-#endif
-
-static void win32_set_position_from_config(void)
-{
-   settings_t *settings  = config_get_ptr();
-   int border_thickness  = GetSystemMetrics(SM_CXSIZEFRAME);
-   int title_bar_height  = GetSystemMetrics(SM_CYCAPTION);
-
-   if (!settings->bools.video_window_save_positions)
-      return;
-
-   g_win32_pos_x         = settings->uints.window_position_x;
-   g_win32_pos_y         = settings->uints.window_position_y;
-   g_win32_pos_width     = settings->uints.window_position_width
-      + border_thickness * 2;
-   g_win32_pos_height    = settings->uints.window_position_height
-      + border_thickness * 2 + title_bar_height;
-}
-
 static void win32_save_position(void)
 {
    RECT rect;
@@ -686,19 +605,227 @@ static void win32_save_position(void)
          settings->uints.window_position_x      = g_win32_pos_x;
          settings->uints.window_position_y      = g_win32_pos_y;
          settings->uints.window_position_width  = g_win32_pos_width - border_thickness * 2;
-         settings->uints.window_position_height = g_win32_pos_height - border_thickness * 2 - title_bar_height - ((settings->bools.ui_menubar_enable && !video_driver_is_threaded()) ? menu_bar_height : 0);
+         settings->uints.window_position_height = g_win32_pos_height - border_thickness * 2 - title_bar_height - (settings->bools.ui_menubar_enable ? menu_bar_height : 0);
       }
    }
+}
+
+static bool win32_browser(
+      HWND owner,
+      char *filename,
+      size_t filename_size,
+      const char *extensions,
+      const char *title,
+      const char *initial_dir)
+{
+   bool result = false;
+   const ui_browser_window_t *browser =
+      ui_companion_driver_get_browser_window_ptr();
+
+   if (browser)
+   {
+      ui_browser_window_state_t browser_state;
+
+      /* These need to be big enough to hold the
+       * path/name of any file the user may select.
+       * FIXME: We should really handle the
+       * error case when this isn't big enough. */
+      char new_title[PATH_MAX];
+      char new_file[32768];
+
+      new_title[0] = '\0';
+      new_file[0] = '\0';
+
+      if (!string_is_empty(title))
+         strlcpy(new_title, title, sizeof(new_title));
+
+      if (filename && *filename)
+         strlcpy(new_file, filename, sizeof(new_file));
+
+      /* OPENFILENAME.lpstrFilters is actually const,
+       * so this cast should be safe */
+      browser_state.filters  = (char*)extensions;
+      browser_state.title    = new_title;
+      browser_state.startdir = strdup(initial_dir);
+      browser_state.path     = new_file;
+      browser_state.window   = owner;
+
+      result = browser->open(&browser_state);
+
+      if (filename && browser_state.path)
+         strlcpy(filename, browser_state.path, filename_size);
+
+      free(browser_state.startdir);
+   }
+
+   return result;
+}
+
+
+static LRESULT win32_menu_loop(HWND owner, WPARAM wparam)
+{
+   WPARAM mode            = wparam & 0xffff;
+
+   switch (mode)
+   {
+      case ID_M_LOAD_CORE:
+         {
+            char win32_file[PATH_MAX_LENGTH] = {0};
+            settings_t *settings    = config_get_ptr();
+            char    *title_cp       = NULL;
+            size_t converted        = 0;
+            const char *extensions  = "Libretro core (.dll)\0*.dll\0All Files\0*.*\0\0";
+            const char *title       = msg_hash_to_str(MENU_ENUM_LABEL_VALUE_CORE_LIST);
+            const char *initial_dir = settings->paths.directory_libretro;
+
+            /* Convert UTF8 to UTF16, then back to the
+             * local code page.
+             * This is needed for proper multi-byte
+             * string display until Unicode is
+             * fully supported.
+             */
+            wchar_t *title_wide     = utf8_to_utf16_string_alloc(title);
+
+            if (title_wide)
+               title_cp             = utf16_to_utf8_string_alloc(title_wide);
+
+            if (!win32_browser(owner, win32_file, sizeof(win32_file),
+                     extensions, title_cp, initial_dir))
+            {
+               if (title_wide)
+                  free(title_wide);
+               if (title_cp)
+                  free(title_cp);
+               break;
+            }
+
+            if (title_wide)
+               free(title_wide);
+            if (title_cp)
+               free(title_cp);
+            path_set(RARCH_PATH_CORE, win32_file);
+            command_event(CMD_EVENT_LOAD_CORE, NULL);
+         }
+         break;
+      case ID_M_LOAD_CONTENT:
+         {
+            char win32_file[PATH_MAX_LENGTH] = {0};
+            char *title_cp          = NULL;
+            size_t converted        = 0;
+            const char *extensions  = "All Files (*.*)\0*.*\0\0";
+            const char *title       = msg_hash_to_str(
+                  MENU_ENUM_LABEL_VALUE_LOAD_CONTENT_LIST);
+            settings_t *settings    = config_get_ptr();
+            const char *initial_dir = settings->paths.directory_menu_content;
+
+            /* Convert UTF8 to UTF16, then back to the
+             * local code page.
+             * This is needed for proper multi-byte
+             * string display until Unicode is
+             * fully supported.
+             */
+            wchar_t *title_wide     = utf8_to_utf16_string_alloc(title);
+
+            if (title_wide)
+               title_cp             = utf16_to_utf8_string_alloc(title_wide);
+
+            if (!win32_browser(owner, win32_file, sizeof(win32_file),
+                     extensions, title_cp, initial_dir))
+            {
+               if (title_wide)
+                  free(title_wide);
+               if (title_cp)
+                  free(title_cp);
+               break;
+            }
+
+            if (title_wide)
+               free(title_wide);
+            if (title_cp)
+               free(title_cp);
+            win32_load_content_from_gui(win32_file);
+         }
+         break;
+      case ID_M_RESET:
+         command_event(CMD_EVENT_RESET, NULL);
+         break;
+      case ID_M_MUTE_TOGGLE:
+         command_event(CMD_EVENT_AUDIO_MUTE_TOGGLE, NULL);
+         break;
+      case ID_M_MENU_TOGGLE:
+         command_event(CMD_EVENT_MENU_TOGGLE, NULL);
+         break;
+      case ID_M_PAUSE_TOGGLE:
+         command_event(CMD_EVENT_PAUSE_TOGGLE, NULL);
+         break;
+      case ID_M_LOAD_STATE:
+         command_event(CMD_EVENT_LOAD_STATE, NULL);
+         break;
+      case ID_M_SAVE_STATE:
+         command_event(CMD_EVENT_SAVE_STATE, NULL);
+         break;
+      case ID_M_DISK_CYCLE:
+         command_event(CMD_EVENT_DISK_EJECT_TOGGLE, NULL);
+         break;
+      case ID_M_DISK_NEXT:
+         command_event(CMD_EVENT_DISK_NEXT, NULL);
+         break;
+      case ID_M_DISK_PREV:
+         command_event(CMD_EVENT_DISK_PREV, NULL);
+         break;
+      case ID_M_FULL_SCREEN:
+         command_event(CMD_EVENT_FULLSCREEN_TOGGLE, NULL);
+         break;
+      case ID_M_MOUSE_GRAB:
+         command_event(CMD_EVENT_GRAB_MOUSE_TOGGLE, NULL);
+         break;
+      case ID_M_TAKE_SCREENSHOT:
+         command_event(CMD_EVENT_TAKE_SCREENSHOT, NULL);
+         break;
+      case ID_M_QUIT:
+         PostMessage(owner, WM_CLOSE, 0, 0);
+         break;
+      case ID_M_TOGGLE_DESKTOP:
+         command_event(CMD_EVENT_UI_COMPANION_TOGGLE, NULL);
+         break;
+      default:
+         if (mode >= ID_M_WINDOW_SCALE_1X && mode <= ID_M_WINDOW_SCALE_10X)
+         {
+            unsigned idx = (mode - (ID_M_WINDOW_SCALE_1X-1));
+            rarch_ctl(RARCH_CTL_SET_WINDOWED_SCALE, &idx);
+            command_event(CMD_EVENT_RESIZE_WINDOWED_SCALE, NULL);
+         }
+         else if (mode == ID_M_STATE_INDEX_AUTO)
+         {
+            signed           idx = -1;
+            settings_t *settings = config_get_ptr();
+            configuration_set_int(
+                  settings, settings->ints.state_slot, idx);
+         }
+         else if (mode >= (ID_M_STATE_INDEX_AUTO+1)
+               && mode <= (ID_M_STATE_INDEX_AUTO+10))
+         {
+            signed           idx = (mode - (ID_M_STATE_INDEX_AUTO+1));
+            settings_t *settings = config_get_ptr();
+            configuration_set_int(
+                  settings, settings->ints.state_slot, idx);
+         }
+         break;
+   }
+
+   return 0L;
 }
 
 static LRESULT CALLBACK WndProcCommon(bool *quit, HWND hwnd, UINT message,
       WPARAM wparam, LPARAM lparam)
 {
-   if (message == WM_NCLBUTTONDBLCLK)
-      doubleclick_on_titlebar = true;
+   bool keydown          = true;
 
    switch (message)
    {
+      case WM_NCLBUTTONDBLCLK:
+         doubleclick_on_titlebar = true;
+         break;
       case WM_SYSCOMMAND:
          /* Prevent screensavers, etc, while running. */
          switch (wparam)
@@ -714,23 +841,100 @@ static LRESULT CALLBACK WndProcCommon(bool *quit, HWND hwnd, UINT message,
          DragFinish((HDROP)wparam);
          break;
       case WM_CHAR:
-      case WM_KEYDOWN:
+         *quit = true;
+         {
+            uint16_t mod          = 0;
+
+            if (GetKeyState(VK_SHIFT)   & 0x80)
+               mod |= RETROKMOD_SHIFT;
+            if (GetKeyState(VK_CONTROL) & 0x80)
+               mod |=  RETROKMOD_CTRL;
+            if (GetKeyState(VK_MENU)    & 0x80)
+               mod |=  RETROKMOD_ALT;
+            if (GetKeyState(VK_CAPITAL) & 0x81)
+               mod |= RETROKMOD_CAPSLOCK;
+            if (GetKeyState(VK_SCROLL)  & 0x81)
+               mod |= RETROKMOD_SCROLLOCK;
+            if ((GetKeyState(VK_LWIN) | GetKeyState(VK_RWIN)) & 0x80)
+               mod |= RETROKMOD_META;
+
+            /* Seems to be hard to synchronize
+             * WM_CHAR and WM_KEYDOWN properly.
+             */
+            input_keyboard_event(true, RETROK_UNKNOWN, wparam, mod,
+                  RETRO_DEVICE_KEYBOARD);
+         }
+         return TRUE;
       case WM_KEYUP:
       case WM_SYSKEYUP:
+         /* Key released */
+         keydown                  = false;
+         /* fall-through */
+      case WM_KEYDOWN:
       case WM_SYSKEYDOWN:
          *quit = true;
-         return win32_handle_keyboard_event(hwnd, message, wparam, lparam);
+         {
+            uint16_t mod          = 0;
+            unsigned keycode      = 0;
+            unsigned keysym       = (lparam >> 16) & 0xff;
+#if _WIN32_WINNT >= 0x0501 /* XP */
+            settings_t *settings  = config_get_ptr();
+#endif
 
-      case WM_MOVE:
-         win32_save_position();
-         break;
+            if (GetKeyState(VK_SHIFT)   & 0x80)
+               mod |= RETROKMOD_SHIFT;
+            if (GetKeyState(VK_CONTROL) & 0x80)
+               mod |=  RETROKMOD_CTRL;
+            if (GetKeyState(VK_MENU)    & 0x80)
+               mod |=  RETROKMOD_ALT;
+            if (GetKeyState(VK_CAPITAL) & 0x81)
+               mod |= RETROKMOD_CAPSLOCK;
+            if (GetKeyState(VK_SCROLL)  & 0x81)
+               mod |= RETROKMOD_SCROLLOCK;
+            if ((GetKeyState(VK_LWIN) | GetKeyState(VK_RWIN)) & 0x80)
+               mod |= RETROKMOD_META;
+
+#if _WIN32_WINNT >= 0x0501 /* XP */
+            if (settings && 
+                  string_is_equal(settings->arrays.input_driver, "raw"))
+               keysym             = (unsigned)wparam;
+            else
+#endif
+            {
+#ifdef HAVE_DINPUT
+               /* extended keys will map to dinput if the high bit is set */
+               if (input_get_ptr() == &input_dinput && (lparam >> 24 & 0x1))
+                  keysym |= 0x80;
+#else
+               /* fix key binding issues on winraw when DirectInput is not available */
+#endif
+            }
+
+            keycode = input_keymaps_translate_keysym_to_rk(keysym);
+
+            input_keyboard_event(keydown, keycode,
+                  0, mod, RETRO_DEVICE_KEYBOARD);
+
+            if (message != WM_SYSKEYDOWN)
+               return 0;
+
+            if (
+                  wparam == VK_F10  ||
+                  wparam == VK_MENU ||
+                  wparam == VK_RSHIFT
+               )
+               return 0;
+         }
+         return DefWindowProc(hwnd, message, wparam, lparam);
+
       case WM_CLOSE:
       case WM_DESTROY:
       case WM_QUIT:
-         win32_save_position();
-
          g_win32_quit  = true;
          *quit         = true;
+         /* fall-through */
+      case WM_MOVE:
+         win32_save_position();
          break;
       case WM_SIZE:
          /* Do not send resize message if we minimize. */
@@ -758,12 +962,6 @@ static LRESULT CALLBACK WndProcCommon(bool *quit, HWND hwnd, UINT message,
    return 0;
 }
 
-static void win32_set_droppable(ui_window_win32_t *window, bool droppable)
-{
-   if (DragAcceptFiles_func != NULL)
-      DragAcceptFiles_func(window->hwnd, droppable);
-}
-
 #if defined(HAVE_D3D) || defined (HAVE_D3D10) || defined (HAVE_D3D11) || defined (HAVE_D3D12)
 LRESULT CALLBACK WndProcD3D(HWND hwnd, UINT message,
       WPARAM wparam, LPARAM lparam)
@@ -771,11 +969,36 @@ LRESULT CALLBACK WndProcD3D(HWND hwnd, UINT message,
    LRESULT ret;
    bool quit = false;
 
-   if (message == WM_NCLBUTTONDBLCLK)
-      doubleclick_on_titlebar = true;
-
    switch (message)
    {
+      case WM_MOUSEMOVE:
+      case WM_POINTERDOWN:
+      case WM_POINTERUP:
+      case WM_POINTERUPDATE:
+      case WM_DEVICECHANGE:
+      case WM_MOUSEWHEEL:
+      case WM_MOUSEHWHEEL:
+#if _WIN32_WINNT >= 0x0500 /* 2K */
+         if (g_taskbar_message && message == g_taskbar_message)
+            taskbar_is_created = true;
+#endif
+#ifdef HAVE_DINPUT
+         if (input_get_ptr() == &input_dinput)
+         {
+            void* input_data = input_get_data();
+            if (input_data && dinput_handle_message(input_data,
+                     message, wparam, lparam))
+               return 0;
+         }
+#endif
+         break;
+      case WM_NCLBUTTONDBLCLK:
+         doubleclick_on_titlebar = true;
+#if _WIN32_WINNT >= 0x0500 /* 2K */
+         if (g_taskbar_message && message == g_taskbar_message)
+            taskbar_is_created = true;
+#endif
+         break;
       case WM_DROPFILES:
       case WM_SYSCOMMAND:
       case WM_CHAR:
@@ -792,35 +1015,23 @@ LRESULT CALLBACK WndProcD3D(HWND hwnd, UINT message,
          ret = WndProcCommon(&quit, hwnd, message, wparam, lparam);
          if (quit)
             return ret;
+#if _WIN32_WINNT >= 0x0500 /* 2K */
+         if (g_taskbar_message && message == g_taskbar_message)
+            taskbar_is_created = true;
+#endif
          break;
       case WM_CREATE:
          {
-            ui_window_win32_t win32_window;
             LPCREATESTRUCT p_cs   = (LPCREATESTRUCT)lparam;
             curD3D                = p_cs->lpCreateParams;
             g_win32_inited        = true;
 
-            win32_window.hwnd     = hwnd;
-
-            win32_set_droppable(&win32_window, true);
+            if (DragAcceptFiles_func)
+               DragAcceptFiles_func(hwnd, true);
          }
          return 0;
    }
 
-#if _WIN32_WINNT >= 0x0500 /* 2K */
-      if (g_taskbar_message && message == g_taskbar_message)
-         win32_set_taskbar_created(true);
-#endif
-
-#ifdef HAVE_DINPUT
-      if (input_get_ptr() == &input_dinput)
-      {
-         void* input_data = input_get_data();
-         if (input_data && dinput_handle_message(input_data,
-               message, wparam, lparam))
-            return 0;
-      }
-#endif
    return DefWindowProc(hwnd, message, wparam, lparam);
 }
 #endif
@@ -832,11 +1043,32 @@ LRESULT CALLBACK WndProcGL(HWND hwnd, UINT message,
    LRESULT ret;
    bool quit = false;
 
-   if (message == WM_NCLBUTTONDBLCLK)
-      doubleclick_on_titlebar = true;
-
    switch (message)
    {
+      case WM_MOUSEMOVE:
+      case WM_POINTERDOWN:
+      case WM_POINTERUP:
+      case WM_POINTERUPDATE:
+      case WM_DEVICECHANGE:
+      case WM_MOUSEWHEEL:
+      case WM_MOUSEHWHEEL:
+#if _WIN32_WINNT >= 0x0500 /* 2K */
+         if (g_taskbar_message && message == g_taskbar_message)
+            taskbar_is_created = true;
+#endif
+#ifdef HAVE_DINPUT
+         if (dinput_wgl && dinput_handle_message(dinput_wgl,
+                  message, wparam, lparam))
+            return 0;
+#endif
+         break;
+      case WM_NCLBUTTONDBLCLK:
+         doubleclick_on_titlebar = true;
+#if _WIN32_WINNT >= 0x0500 /* 2K */
+         if (g_taskbar_message && message == g_taskbar_message)
+            taskbar_is_created = true;
+#endif
+         break;
       case WM_DROPFILES:
       case WM_SYSCOMMAND:
       case WM_CHAR:
@@ -854,44 +1086,55 @@ LRESULT CALLBACK WndProcGL(HWND hwnd, UINT message,
                hwnd, message, wparam, lparam);
          if (quit)
             return ret;
+#if _WIN32_WINNT >= 0x0500 /* 2K */
+         if (g_taskbar_message && message == g_taskbar_message)
+            taskbar_is_created = true;
+#endif
          break;
       case WM_CREATE:
-         {
-            ui_window_win32_t win32_window;
-            win32_window.hwnd           = hwnd;
-
-            create_graphics_context(hwnd, &g_win32_quit);
-
-            win32_set_droppable(&win32_window, true);
-         }
+         create_graphics_context(hwnd, &g_win32_quit);
+         if (DragAcceptFiles_func)
+            DragAcceptFiles_func(hwnd, true);
          return 0;
    }
 
-#if _WIN32_WINNT >= 0x0500 /* 2K */
-      if (g_taskbar_message && message == g_taskbar_message)
-         win32_set_taskbar_created(true);
-#endif
-
-#ifdef HAVE_DINPUT
-   if (dinput_wgl && dinput_handle_message(dinput_wgl,
-            message, wparam, lparam))
-      return 0;
-#endif
    return DefWindowProc(hwnd, message, wparam, lparam);
 }
 #endif
 
+#ifdef HAVE_GDI
 LRESULT CALLBACK WndProcGDI(HWND hwnd, UINT message,
       WPARAM wparam, LPARAM lparam)
 {
    LRESULT ret;
    bool quit = false;
 
-   if (message == WM_NCLBUTTONDBLCLK)
-      doubleclick_on_titlebar = true;
-
    switch (message)
    {
+      case WM_MOUSEMOVE:
+      case WM_POINTERDOWN:
+      case WM_POINTERUP:
+      case WM_POINTERUPDATE:
+      case WM_DEVICECHANGE:
+      case WM_MOUSEWHEEL:
+      case WM_MOUSEHWHEEL:
+#if _WIN32_WINNT >= 0x0500 /* 2K */
+         if (g_taskbar_message && message == g_taskbar_message)
+            taskbar_is_created = true;
+#endif
+#ifdef HAVE_DINPUT
+         if (dinput_gdi && dinput_handle_message(dinput_gdi,
+                  message, wparam, lparam))
+            return 0;
+#endif
+         break;
+      case WM_NCLBUTTONDBLCLK:
+         doubleclick_on_titlebar = true;
+#if _WIN32_WINNT >= 0x0500 /* 2K */
+         if (g_taskbar_message && message == g_taskbar_message)
+            taskbar_is_created = true;
+#endif
+         break;
       case WM_PAINT:
       {
          gdi_t *gdi = (gdi_t*)video_driver_get_ptr(false);
@@ -905,20 +1148,10 @@ LRESULT CALLBACK WndProcGDI(HWND hwnd, UINT message,
             {
                /* draw menu contents behind a gradient background */
                if (gdi && gdi->memDC)
-               {
-                  /*RECT rect;
-                  HBRUSH brush = CreateSolidBrush(RGB(1,81,127));
-
-                  GetClientRect(hwnd, &rect);*/
-
                   StretchBlt(gdi->winDC,
                         0, 0,
                         gdi->screen_width, gdi->screen_height,
                         gdi->memDC, 0, 0, gdi->video_width, gdi->video_height, SRCCOPY);
-
-                  /*FillRect(gdi->memDC, &rect, brush);
-                  DeleteObject(brush);*/
-               }
            }
            else
 #endif
@@ -935,6 +1168,10 @@ LRESULT CALLBACK WndProcGDI(HWND hwnd, UINT message,
            SelectObject(gdi->memDC, gdi->bmp_old);
         }
 
+#if _WIN32_WINNT >= 0x0500 /* 2K */
+         if (g_taskbar_message && message == g_taskbar_message)
+            taskbar_is_created = true;
+#endif
         break;
       }
       case WM_DROPFILES:
@@ -953,52 +1190,44 @@ LRESULT CALLBACK WndProcGDI(HWND hwnd, UINT message,
          ret = WndProcCommon(&quit, hwnd, message, wparam, lparam);
          if (quit)
             return ret;
+#if _WIN32_WINNT >= 0x0500 /* 2K */
+         if (g_taskbar_message && message == g_taskbar_message)
+            taskbar_is_created = true;
+#endif
          break;
       case WM_CREATE:
-         {
-            ui_window_win32_t win32_window;
-            win32_window.hwnd = hwnd;
-
-            create_gdi_context(hwnd, &g_win32_quit);
-
-            win32_set_droppable(&win32_window, true);
-         }
+         create_gdi_context(hwnd, &g_win32_quit);
+         if (DragAcceptFiles_func)
+            DragAcceptFiles_func(hwnd, true);
          return 0;
    }
 
-#if _WIN32_WINNT >= 0x0500 /* 2K */
-      if (g_taskbar_message && message == g_taskbar_message)
-         win32_set_taskbar_created(true);
-#endif
-
-#ifdef HAVE_DINPUT
-   if (dinput_gdi && dinput_handle_message(dinput_gdi,
-            message, wparam, lparam))
-      return 0;
-#endif
    return DefWindowProc(hwnd, message, wparam, lparam);
 }
+#endif
 
 bool win32_window_create(void *data, unsigned style,
       RECT *mon_rect, unsigned width,
       unsigned height, bool fullscreen)
 {
+   settings_t *settings    = config_get_ptr();
 #if defined(_WIN32_WINNT) && _WIN32_WINNT >= 0x0500 /* 2K */
    DEV_BROADCAST_DEVICEINTERFACE notification_filter;
+   unsigned window_opacity    = settings->uints.video_window_opacity;
+   bool window_show_decor     = settings->bools.video_window_show_decorations;
 #endif
-   settings_t *settings  = config_get_ptr();
 #ifndef _XBOX
-   unsigned user_width   = width;
-   unsigned user_height  = height;
+   unsigned user_width        = width;
+   unsigned user_height       = height;
+   bool window_save_positions = settings->bools.video_window_save_positions;
 
-   if (settings->bools.video_window_save_positions
-         && !fullscreen)
+   if (window_save_positions && !fullscreen)
    {
       user_width = g_win32_pos_width;
       user_height= g_win32_pos_height;
    }
    main_window.hwnd = CreateWindowEx(0,
-         "RetroArch", "RetroArch",
+         msg_hash_to_str(MSG_PROGRAM), msg_hash_to_str(MSG_PROGRAM),
          style,
          fullscreen ? mon_rect->left : g_win32_pos_x,
          fullscreen ? mon_rect->top  : g_win32_pos_y,
@@ -1011,7 +1240,7 @@ bool win32_window_create(void *data, unsigned style,
 #if defined(_WIN32_WINNT) && _WIN32_WINNT >= 0x0500 /* 2K */
    g_taskbar_message = RegisterWindowMessage("TaskbarButtonCreated");
 
-   ZeroMemory(&notification_filter, sizeof(notification_filter) );
+   memset(&notification_filter, 0, sizeof(notification_filter));
    notification_filter.dbcc_size       = sizeof(DEV_BROADCAST_DEVICEINTERFACE);
    notification_filter.dbcc_devicetype = DBT_DEVTYP_DEVICEINTERFACE;
    notification_filter.dbcc_classguid  = GUID_DEVINTERFACE_HID;
@@ -1024,20 +1253,21 @@ bool win32_window_create(void *data, unsigned style,
 
    video_driver_display_type_set(RARCH_DISPLAY_WIN32);
    video_driver_display_set(0);
+   video_driver_display_userdata_set((uintptr_t)&main_window);
    video_driver_window_set((uintptr_t)main_window.hwnd);
 
 #if defined(_WIN32_WINNT) && _WIN32_WINNT >= 0x0500 /* 2K */
-   if (!settings->bools.video_window_show_decorations)
+   if (!window_show_decor)
       SetWindowLongPtr(main_window.hwnd, GWL_STYLE, WS_POPUP);
 
    /* Windows 2000 and above use layered windows to enable transparency */
-   if (settings->uints.video_window_opacity < 100)
+   if (window_opacity < 100)
    {
       SetWindowLongPtr(main_window.hwnd,
            GWL_EXSTYLE,
            GetWindowLongPtr(main_window.hwnd, GWL_EXSTYLE) | WS_EX_LAYERED);
       SetLayeredWindowAttributes(main_window.hwnd, 0, (255 *
-               settings->uints.video_window_opacity) / 100, LWA_ALPHA);
+               window_opacity) / 100, LWA_ALPHA);
    }
 #endif
 #endif
@@ -1118,7 +1348,7 @@ static bool win32_monitor_set_fullscreen(
 #endif
 }
 
-void win32_show_cursor(bool state)
+void win32_show_cursor(void *data, bool state)
 {
 #if !defined(_XBOX)
    if (state)
@@ -1132,14 +1362,10 @@ void win32_check_window(bool *quit, bool *resize,
       unsigned *width, unsigned *height)
 {
 #if !defined(_XBOX)
-   if (video_driver_is_threaded())
-   {
-      const ui_application_t *application =
-         ui_companion_driver_get_application_ptr();
-      if (application)
-         application->process_events();
-   }
-   *quit            = g_win32_quit;
+   bool video_is_threaded = video_driver_is_threaded();
+   if (video_is_threaded)
+      ui_companion_win32.application->process_events();
+   *quit                  = g_win32_quit;
 
    if (g_win32_resized)
    {
@@ -1273,7 +1499,17 @@ void win32_set_style(MONITORINFOEX *current_mon, HMONITOR *hm_to_use,
 
       if (settings->bools.video_window_save_positions)
       {
-         win32_set_position_from_config();
+         /* Set position from config */
+         int border_thickness  = GetSystemMetrics(SM_CXSIZEFRAME);
+         int title_bar_height  = GetSystemMetrics(SM_CYCAPTION);
+
+         g_win32_pos_x         = settings->uints.window_position_x;
+         g_win32_pos_y         = settings->uints.window_position_y;
+         g_win32_pos_width     = settings->uints.window_position_width
+            + border_thickness * 2;
+         g_win32_pos_height    = settings->uints.window_position_height
+            + border_thickness * 2 + title_bar_height;
+
          if (g_win32_pos_width != 0 && g_win32_pos_height != 0)
             position_set_from_config = true;
       }
@@ -1302,8 +1538,9 @@ void win32_set_window(unsigned *width, unsigned *height,
    {
       settings_t *settings      = config_get_ptr();
       const ui_window_t *window = ui_companion_driver_get_window_ptr();
+      bool ui_menubar_enable    = settings->bools.ui_menubar_enable;
 
-      if (!fullscreen && settings->bools.ui_menubar_enable && !video_driver_is_threaded())
+      if (!fullscreen && ui_menubar_enable)
       {
          RECT rc_temp;
          rc_temp.left   = 0;
@@ -1326,7 +1563,7 @@ void win32_set_window(unsigned *width, unsigned *height,
          window->set_focused(&main_window);
    }
 
-   win32_show_cursor(!fullscreen);
+   win32_show_cursor(NULL, !fullscreen);
 #endif
 }
 
@@ -1408,20 +1645,11 @@ BOOL IsIconic(HWND hwnd)
 }
 #endif
 
-bool win32_has_focus(void)
+bool win32_has_focus(void *data)
 {
    if (g_win32_inited)
-   {
-#ifdef _XBOX
       if (GetForegroundWindow() == main_window.hwnd)
          return true;
-#else
-      const ui_window_t *window =
-         ui_companion_driver_get_window_ptr();
-      if (window)
-         return window->focused(&main_window);
-#endif
-   }
 
    return false;
 }
@@ -1444,7 +1672,8 @@ void win32_window_reset(void)
 void win32_destroy_window(void)
 {
 #ifndef _XBOX
-   UnregisterClass("RetroArch", GetModuleHandle(NULL));
+   UnregisterClass(msg_hash_to_str(MSG_PROGRAM), 
+         GetModuleHandle(NULL));
 #if defined(_WIN32_WINNT) && _WIN32_WINNT >= 0x500 /* 2K */
    UnregisterDeviceNotification(notification_handler);
 #endif
@@ -1585,20 +1814,23 @@ void win32_get_video_output_next(
    }
 }
 
+static BOOL win32_internal_get_video_output(DWORD iModeNum, DEVMODE *dm)
+{
+#if defined(_WIN32_WINNT) && _WIN32_WINNT >= 0x0500 /* 2K */
+   return EnumDisplaySettingsEx(NULL, iModeNum, dm, EDS_ROTATEDMODE);
+#else
+   return EnumDisplaySettings(NULL, iModeNum, dm);
+#endif
+}
+
 bool win32_get_video_output(DEVMODE *dm, int mode, size_t len)
 {
    memset(dm, 0, len);
    dm->dmSize  = len;
-#if defined(_WIN32_WINNT) && _WIN32_WINNT >= 0x0500 /* 2K */
-   if (EnumDisplaySettingsEx(NULL,
-            (mode == -1) ? ENUM_CURRENT_SETTINGS : mode, dm, EDS_ROTATEDMODE) == 0)
-      return false;
-#else
-   if (EnumDisplaySettings(NULL,
-            (mode == -1) ? ENUM_CURRENT_SETTINGS : mode, dm) == 0)
-      return false;
-#endif
 
+   if (win32_internal_get_video_output((mode == -1) ? ENUM_CURRENT_SETTINGS : mode,
+            dm) == 0)
+      return false;
    return true;
 }
 
@@ -1611,4 +1843,22 @@ void win32_get_video_output_size(unsigned *width, unsigned *height)
       *width  = dm.dmPelsWidth;
       *height = dm.dmPelsHeight;
    }
+}
+
+void win32_setup_pixel_format(HDC hdc, bool supports_gl)
+{
+   PIXELFORMATDESCRIPTOR pfd = {0};
+   pfd.nSize        = sizeof(PIXELFORMATDESCRIPTOR);
+   pfd.nVersion     = 1;
+   pfd.dwFlags      = PFD_DRAW_TO_WINDOW | PFD_DOUBLEBUFFER;
+   pfd.iPixelType   = PFD_TYPE_RGBA;
+   pfd.cColorBits   = 32;
+   pfd.cDepthBits   = 0;
+   pfd.cStencilBits = 0;
+   pfd.iLayerType   = PFD_MAIN_PLANE;
+
+   if (supports_gl)
+      pfd.dwFlags  |= PFD_SUPPORT_OPENGL;
+
+   SetPixelFormat(hdc, ChoosePixelFormat(hdc, &pfd), &pfd);
 }

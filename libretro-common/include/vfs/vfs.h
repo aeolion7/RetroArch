@@ -1,4 +1,4 @@
-/* Copyright  (C) 2010-2019 The RetroArch team
+/* Copyright  (C) 2010-2020 The RetroArch team
 *
 * ---------------------------------------------------------------------------------------
 * The following license statement only applies to this file (vfs_implementation.h).
@@ -24,6 +24,13 @@
 #define __LIBRETRO_SDK_VFS_H
 
 #include <retro_common_api.h>
+#include <boolean.h>
+
+#ifdef RARCH_INTERNAL
+#ifndef VFS_FRONTEND
+#define VFS_FRONTEND
+#endif
+#endif
 
 RETRO_BEGIN_DECLS
 
@@ -43,6 +50,9 @@ typedef struct
    unsigned char cur_frame;
    unsigned char cur_track;
    unsigned cur_lba;
+   unsigned last_frame_lba;
+   unsigned char last_frame[2352];
+   bool last_frame_valid;
 } vfs_cdrom_t;
 #endif
 

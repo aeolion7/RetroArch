@@ -205,10 +205,6 @@ static void exynos_page_flip_handler(int fd, unsigned frame, unsigned sec,
 {
    struct exynos_page *page = data;
 
-#if (EXYNOS_GFX_DEBUG_LOG == 1)
-   RARCH_LOG("[video_exynos]: in exynos_page_flip_handler, page = %p\n", page);
-#endif
-
    if (page->base->cur_page)
       page->base->cur_page->used = false;
 
@@ -594,15 +590,17 @@ static void exynos_close(struct exynos_data *pdata)
 static int exynos_init(struct exynos_data *pdata, unsigned bpp)
 {
    unsigned i;
-   settings_t *settings   = config_get_ptr();
+   settings_t *settings        = config_get_ptr();
+   unsigned video_fullscreen_x = settings->uints.video_fullscreen_x;
+   unsigned video_fullscreen_y = settings->uints.video_fullscreen_y;
 
-   if (settings->uints.video_fullscreen_x != 0 &&
-         settings->uints.video_fullscreen_y != 0)
+   if (  video_fullscreen_x != 0 &&
+         video_fullscreen_y != 0)
    {
       for (i = 0; i < g_drm_connector->count_modes; i++)
       {
-         if (g_drm_connector->modes[i].hdisplay == settings->uints.video_fullscreen_x &&
-               g_drm_connector->modes[i].vdisplay == settings->uints.video_fullscreen_y)
+         if (g_drm_connector->modes[i].hdisplay   == video_fullscreen_x &&
+               g_drm_connector->modes[i].vdisplay == video_fullscreen_y)
          {
             g_drm_mode = &g_drm_connector->modes[i];
             break;
@@ -611,9 +609,10 @@ static int exynos_init(struct exynos_data *pdata, unsigned bpp)
 
       if (!g_drm_mode)
       {
-         RARCH_ERR("[video_exynos]: requested resolution (%ux%u) not available\n",
-               settings->uints.video_fullscreen_x,
-               settings->uints.video_fullscreen_y);
+         RARCH_ERR(
+               "[video_exynos]: requested resolution (%ux%u) not available\n",
+               video_fullscreen_x,
+               video_fullscreen_y);
          goto fail;
       }
 
@@ -1050,17 +1049,23 @@ static int exynos_init_font(struct exynos_video *vid)
    const unsigned buf_width  = align_common(pdata->aspect * (float)buf_height, 16);
    const unsigned buf_bpp    = defaults[EXYNOS_IMAGE_FONT].bpp;
    settings_t *settings      = config_get_ptr();
+   bool video_font_enable    = settings->bools.video_font_enable;
+   const char *font_path     = settings->video.font_path;
+   float video_font_size     = settings->floats.video_font_size;
+   float video_msg_color_r   = settings->floats.video_msg_color_r;
+   float video_msg_color_g   = settings->floats.video_msg_color_g;
+   float video_msg_color_b   = settings->floats.video_msg_color_b;
 
-   if (!settings->bools.video_font_enable)
+   if (!video_font_enable)
       return 0;
 
    if (font_renderer_create_default(&vid->font_driver, &vid->font,
-            *settings->video.font_path ? settings->video.font_path : NULL,
-            settings->floats.video_font_size))
+            *font_path ? font_path : NULL,
+            video_font_size))
    {
-      const int r = settings->floats.video_msg_color_r * 15;
-      const int g = settings->floats.video_msg_color_g * 15;
-      const int b = settings->floats.video_msg_color_b * 15;
+      const int r = video_msg_color_r * 15;
+      const int g = video_msg_color_g * 15;
+      const int b = video_msg_color_b * 15;
 
       vid->font_color = ((b < 0 ? 0 : (b > 15 ? 15 : b)) << 0) |
          ((g < 0 ? 0 : (g > 15 ? 15 : g)) << 4) |
@@ -1080,14 +1085,9 @@ static int exynos_init_font(struct exynos_video *vid)
       return -1;
    }
 
-   src->width = buf_width;
+   src->width  = buf_width;
    src->height = buf_height;
    src->stride = buf_width * buf_bpp;
-
-#if (EXYNOS_GFX_DEBUG_LOG == 1)
-   RARCH_LOG("[video_exynos]: using font rendering image with size %ux%u\n",
-         buf_width, buf_height);
-#endif
 
    return 0;
 }
@@ -1164,7 +1164,7 @@ static int exynos_render_msg(struct exynos_video *vid,
 }
 
 static void *exynos_gfx_init(const video_info_t *video,
-      const input_driver_t **input, void **input_data)
+      input_driver_t **input, void **input_data)
 {
    struct exynos_video *vid;
    const unsigned fb_bpp = 4; /* Use XRGB8888 framebuffer. */
@@ -1329,10 +1329,8 @@ static bool exynos_gfx_frame(void *data, const void *frame, unsigned width,
          (struct font_params*)&video_info->osd_stat_params : NULL;
 
       if (osd_params)
-      {
-         font_driver_render_msg(video_info, NULL, video_info->stat_text,
-               (const struct font_params*)&video_info->osd_stat_params);
-      }
+         font_driver_render_msg(vid, video_info, video_info->stat_text,
+               (const struct font_params*)&video_info->osd_stat_params, NULL);
    }
 
    if (msg)
@@ -1357,7 +1355,8 @@ fail:
    return false;
 }
 
-static void exynos_gfx_set_nonblock_state(void *data, bool state)
+static void exynos_gfx_set_nonblock_state(void *data, bool state,
+      bool adaptive_vsync_enabled, unsigned swap_interval)
 {
    struct exynos_video *vid = data;
    if (vid && vid->data)
@@ -1408,25 +1407,9 @@ static void exynos_set_aspect_ratio(void *data, unsigned aspect_ratio_idx)
 {
    struct exynos_video *vid = (struct exynos_video*)data;
 
-   switch (aspect_ratio_idx)
-   {
-      case ASPECT_RATIO_SQUARE:
-         video_driver_set_viewport_square_pixel();
-         break;
+   if (!vid)
+      return;
 
-      case ASPECT_RATIO_CORE:
-         video_driver_set_viewport_core();
-         break;
-
-      case ASPECT_RATIO_CONFIG:
-         video_driver_set_viewport_config();
-         break;
-
-      default:
-         break;
-   }
-
-   video_driver_set_aspect_ratio_value(aspectratio_lut[aspect_ratio_idx].value);
    vid->aspect_changed = true;
 }
 

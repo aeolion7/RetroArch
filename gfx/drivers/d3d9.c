@@ -31,6 +31,10 @@
 
 #include <d3d9.h>
 
+#ifdef HAVE_CONFIG_H
+#include "../../config.h"
+#endif
+
 #include "../../defines/d3d_defines.h"
 #include "../common/d3d_common.h"
 #include "../common/d3d9_common.h"
@@ -54,9 +58,9 @@
 
 #ifdef HAVE_MENU
 #include "../../menu/menu_driver.h"
-#ifdef HAVE_MENU_WIDGETS
-#include "../../menu/widgets/menu_widgets.h"
 #endif
+#ifdef HAVE_GFX_WIDGETS
+#include "../gfx_widgets.h"
 #endif
 
 #include "../font_driver.h"
@@ -94,7 +98,7 @@ static bool d3d9_set_resize(d3d9_video_t *d3d,
    RARCH_LOG("[D3D9]: Resize %ux%u.\n", new_width, new_height);
    d3d->video_info.width  = new_width;
    d3d->video_info.height = new_height;
-   video_driver_set_size(&new_width, &new_height);
+   video_driver_set_size(new_width, new_height);
 
    return true;
 }
@@ -274,15 +278,16 @@ static bool d3d9_init_chain(d3d9_video_t *d3d, const video_info_t *video_info)
       {
          unsigned i;
          settings_t *settings = config_get_ptr();
+         bool video_smooth    = settings->bools.video_smooth;
 
          for (i = 0; i < d3d->shader.luts; i++)
          {
             if (!d3d->renderchain_driver->add_lut(
                      d3d->renderchain_data,
                      d3d->shader.lut[i].id, d3d->shader.lut[i].path,
-                     d3d->shader.lut[i].filter == RARCH_FILTER_UNSPEC ?
-                     settings->bools.video_smooth :
-                     (d3d->shader.lut[i].filter == RARCH_FILTER_LINEAR)))
+                     d3d->shader.lut[i].filter == RARCH_FILTER_UNSPEC 
+                     ? video_smooth 
+                     : (d3d->shader.lut[i].filter == RARCH_FILTER_LINEAR)))
             {
                RARCH_ERR("[D3D9]: Failed to init LUTs.\n");
                return false;
@@ -325,7 +330,7 @@ static bool d3d9_init_multipass(d3d9_video_t *d3d, const char *shader_path)
    unsigned i;
    bool            use_extra_pass = false;
    struct video_shader_pass *pass = NULL;
-   config_file_t            *conf = config_file_new(shader_path);
+   config_file_t            *conf = video_shader_read_preset(shader_path);
 
    if (!conf)
    {
@@ -344,8 +349,6 @@ static bool d3d9_init_multipass(d3d9_video_t *d3d, const char *shader_path)
 
    config_file_free(conf);
 
-   if (!string_is_empty(shader_path))
-      video_shader_resolve_relative(&d3d->shader, shader_path);
    RARCH_LOG("[D3D9]: Found %u shaders.\n", d3d->shader.passes);
 
    for (i = 0; i < d3d->shader.passes; i++)
@@ -422,6 +425,7 @@ void d3d9_set_mvp(void *data, const void *mat_data)
    d3d9_set_vertex_shader_constantf(dev, 0, (const float*)mat_data, 4);
 }
 
+#if defined(HAVE_MENU) || defined(HAVE_OVERLAY)
 static void d3d9_overlay_render(d3d9_video_t *d3d,
       video_frame_info_t *video_info,
       overlay_t *overlay, bool force_linear)
@@ -522,8 +526,9 @@ static void d3d9_overlay_render(d3d9_video_t *d3d,
 
    if (!force_linear)
    {
-      settings_t *settings = config_get_ptr();
-      if (!settings->bools.menu_linear_filter)
+      settings_t *settings    = config_get_ptr();
+      bool menu_linear_filter = settings->bools.menu_linear_filter;
+      if (!menu_linear_filter)
          filter_type       = D3DTEXF_POINT;
    }
 
@@ -539,6 +544,7 @@ static void d3d9_overlay_render(d3d9_video_t *d3d,
    d3d9_disable_blend_func(dev);
    d3d9_set_viewports(dev, &d3d->final_viewport);
 }
+#endif
 
 static void d3d9_free_overlay(d3d9_video_t *d3d, overlay_t *overlay)
 {
@@ -660,9 +666,10 @@ void d3d9_make_d3dpp(void *data,
 
    if (info->vsync)
    {
-      settings_t *settings        = config_get_ptr();
+      settings_t *settings         = config_get_ptr();
+      unsigned video_swap_interval = settings->uints.video_swap_interval;
 
-      switch (settings->uints.video_swap_interval)
+      switch (video_swap_interval)
       {
          default:
          case 1:
@@ -705,7 +712,7 @@ void d3d9_make_d3dpp(void *data,
       unsigned width  = 0;
       unsigned height = 0;
       d3d9_get_video_size(d3d, &width, &height);
-      video_driver_set_size(&width, &height);
+      video_driver_set_size(width, height);
 #endif
       video_driver_get_size(&d3dpp->BackBufferWidth,
             &d3dpp->BackBufferHeight);
@@ -765,13 +772,14 @@ static void d3d9_calculate_rect(void *data,
    float device_aspect   = (float)*width / *height;
    d3d9_video_t *d3d     = (d3d9_video_t*)data;
    settings_t *settings  = config_get_ptr();
+   bool scale_integer    = settings->bools.video_scale_integer;
 
    video_driver_get_size(width, height);
 
    *x                   = 0;
    *y                   = 0;
 
-   if (settings->bools.video_scale_integer && !force_full)
+   if (scale_integer && !force_full)
    {
       struct video_viewport vp;
 
@@ -952,7 +960,8 @@ static bool d3d9_initialize(d3d9_video_t *d3d, const video_info_t *info)
    strlcpy(settings->paths.path_font, "game:\\media\\Arial_12.xpr",
          sizeof(settings->paths.path_font));
 #endif
-   font_driver_init_osd(d3d, false,
+   font_driver_init_osd(d3d, info,
+         false,
          info->is_threaded,
          FONT_DRIVER_RENDER_D3D9_API);
 
@@ -1016,20 +1025,24 @@ static bool d3d9_restore(void *data)
    return true;
 }
 
-static void d3d9_set_nonblock_state(void *data, bool state)
+static void d3d9_set_nonblock_state(void *data, bool state,
+      bool adaptive_vsync_enabled,
+      unsigned swap_interval)
 {
+#ifdef _XBOX
    int interval                 = 0;
+#endif
    d3d9_video_t            *d3d = (d3d9_video_t*)data;
 
    if (!d3d)
       return;
 
+#ifdef _XBOX
    if (!state)
       interval           = 1;
+#endif
 
    d3d->video_info.vsync = !state;
-
-   (void)interval;
 
 #ifdef _XBOX
    d3d9_set_render_state(d3d->dev,
@@ -1073,7 +1086,7 @@ static bool d3d9_alive(void *data)
 
    if (  temp_width  != 0 &&
          temp_height != 0)
-      video_driver_set_size(&temp_width, &temp_height);
+      video_driver_set_size(temp_width, temp_height);
 
    return ret;
 }
@@ -1090,27 +1103,6 @@ static bool d3d9_suppress_screensaver(void *data, bool enable)
 static void d3d9_set_aspect_ratio(void *data, unsigned aspect_ratio_idx)
 {
    d3d9_video_t *d3d = (d3d9_video_t*)data;
-
-   switch (aspect_ratio_idx)
-   {
-      case ASPECT_RATIO_SQUARE:
-         video_driver_set_viewport_square_pixel();
-         break;
-
-      case ASPECT_RATIO_CORE:
-         video_driver_set_viewport_core();
-         break;
-
-      case ASPECT_RATIO_CONFIG:
-         video_driver_set_viewport_config();
-         break;
-
-      default:
-         break;
-   }
-
-   video_driver_set_aspect_ratio_value(
-         aspectratio_lut[aspect_ratio_idx].value);
 
    if (!d3d)
       return;
@@ -1138,13 +1130,13 @@ static void d3d9_set_osd_msg(void *data,
 
    d3d9_set_font_rect(d3d, d3d_font_params);
    d3d9_begin_scene(dev);
-   font_driver_render_msg(video_info, font,
-         msg, d3d_font_params);
+   font_driver_render_msg(d3d, video_info,
+         msg, d3d_font_params, font);
    d3d9_end_scene(dev);
 }
 
 static bool d3d9_init_internal(d3d9_video_t *d3d,
-      const video_info_t *info, const input_driver_t **input,
+      const video_info_t *info, input_driver_t **input,
       void **input_data)
 {
 #ifdef HAVE_MONITOR
@@ -1209,7 +1201,7 @@ static bool d3d9_init_internal(d3d9_video_t *d3d,
    {
       unsigned new_width  = info->fullscreen ? full_x : info->width;
       unsigned new_height = info->fullscreen ? full_y : info->height;
-      video_driver_set_size(&new_width, &new_height);
+      video_driver_set_size(new_width, new_height);
    }
 
 #ifdef HAVE_WINDOW
@@ -1231,16 +1223,20 @@ static bool d3d9_init_internal(d3d9_video_t *d3d,
       return false;
 
    {
-      const char *shader_preset;
-      enum rarch_shader_type type;
 
       d3d9_fake_context.get_flags = d3d9_get_flags;
+#ifndef _XBOX_
+      d3d9_fake_context.get_metrics = win32_get_metrics;
+#endif
       video_context_driver_set(&d3d9_fake_context); 
+#if defined(HAVE_CG) || defined(HAVE_HLSL)
+      {
+         const char *shader_preset   = retroarch_get_shader_preset();
+         enum rarch_shader_type type = video_shader_parse_type(shader_preset);
 
-      shader_preset = retroarch_get_shader_preset();
-      type = video_shader_parse_type(shader_preset);
-
-      d3d9_set_shader(d3d, type, shader_preset);
+         d3d9_set_shader(d3d, type, shader_preset);
+      }
+#endif
    }
 
    d3d_input_driver(settings->arrays.input_joypad_driver,
@@ -1278,15 +1274,8 @@ static void d3d9_set_rotation(void *data, unsigned rot)
    d3d->dev_rotation = rot;
 }
 
-static void d3d9_show_mouse(void *data, bool state)
-{
-#ifndef XBOX
-   win32_show_cursor(state);
-#endif
-}
-
 static void *d3d9_init(const video_info_t *info,
-      const input_driver_t **input, void **input_data)
+      input_driver_t **input, void **input_data)
 {
    d3d9_video_t *d3d = (d3d9_video_t*)calloc(1, sizeof(*d3d));
 
@@ -1488,7 +1477,9 @@ static void d3d9_overlay_enable(void *data, bool state)
    for (i = 0; i < d3d->overlays_size; i++)
       d3d->overlays_enabled = state;
 
-   d3d9_show_mouse(d3d, state);
+#ifndef XBOX
+   win32_show_cursor(d3d, state);
+#endif
 }
 
 static void d3d9_overlay_full_screen(void *data, bool enable)
@@ -1526,30 +1517,9 @@ static void d3d9_get_overlay_interface(void *data,
 
 static void d3d9_update_title(video_frame_info_t *video_info)
 {
-   const settings_t *settings = config_get_ptr();
-#ifdef _XBOX
-   const ui_window_t *window      = NULL;
-#else
-   const ui_window_t *window      = ui_companion_driver_get_window_ptr();
-#endif
-
-   if (settings->bools.video_memory_show)
-   {
-#ifndef __WINRT__
-      uint64_t mem_bytes_used = frontend_driver_get_used_memory();
-      uint64_t mem_bytes_total = frontend_driver_get_total_memory();
-      char         mem[128];
-
-      mem[0] = '\0';
-
-      snprintf(
-            mem, sizeof(mem), " || MEM: %.2f/%.2fMB", mem_bytes_used / (1024.0f * 1024.0f),
-            mem_bytes_total / (1024.0f * 1024.0f));
-      strlcat(video_info->fps_text, mem, sizeof(video_info->fps_text));
-#endif
-   }
-
 #ifndef _XBOX
+   const ui_window_t *window      = ui_companion_driver_get_window_ptr();
+
    if (window)
    {
       char title[128];
@@ -1656,8 +1626,8 @@ static bool d3d9_frame(void *data, const void *frame,
       {
          d3d9_set_viewports(d3d->dev, &screen_vp);
          d3d9_begin_scene(d3d->dev);
-         font_driver_render_msg(video_info, NULL, video_info->stat_text,
-               (const struct font_params*)&video_info->osd_stat_params);
+         font_driver_render_msg(d3d, video_info, video_info->stat_text,
+               (const struct font_params*)&video_info->osd_stat_params, NULL);
          d3d9_end_scene(d3d->dev);
       }
    }
@@ -1672,17 +1642,16 @@ static bool d3d9_frame(void *data, const void *frame,
    }
 #endif
 
-#ifdef HAVE_MENU
-#ifdef HAVE_MENU_WIDGETS
-   menu_widgets_frame(video_info);
-#endif
+#ifdef HAVE_GFX_WIDGETS
+   if (video_info->widgets_inited)
+      gfx_widgets_frame(video_info);
 #endif
 
    if (msg && *msg)
    {
       d3d9_set_viewports(d3d->dev, &screen_vp);
       d3d9_begin_scene(d3d->dev);
-      font_driver_render_msg(video_info, NULL, msg, NULL);
+      font_driver_render_msg(d3d, video_info, msg, NULL, NULL);
       d3d9_end_scene(d3d->dev);
    }
 
@@ -1752,6 +1721,7 @@ end:
 static bool d3d9_set_shader(void *data,
       enum rarch_shader_type type, const char *path)
 {
+#if defined(HAVE_CG) || defined(HAVE_HLSL)
    d3d9_video_t *d3d = (d3d9_video_t*)data;
 
    if (!d3d)
@@ -1790,6 +1760,9 @@ static bool d3d9_set_shader(void *data,
    }
 
    return true;
+#else
+   return false;
+#endif
 }
 
 static void d3d9_set_menu_texture_frame(void *data,
@@ -1941,6 +1914,7 @@ static void d3d9_video_texture_load_d3d(
    *id = (uintptr_t)tex;
 }
 
+#ifdef HAVE_THREADS
 static int d3d9_video_texture_load_wrap_d3d(void *data)
 {
    uintptr_t id = 0;
@@ -1950,6 +1924,7 @@ static int d3d9_video_texture_load_wrap_d3d(void *data)
    d3d9_video_texture_load_d3d(info, &id);
    return id;
 }
+#endif
 
 static uintptr_t d3d9_load_texture(void *video_data, void *data,
       bool threaded, enum texture_filter_type filter_type)
@@ -1961,9 +1936,11 @@ static uintptr_t d3d9_load_texture(void *video_data, void *data,
    info.data     = data;
    info.type     = filter_type;
 
+#ifdef HAVE_THREADS
    if (threaded)
       return video_thread_texture_load(&info,
             d3d9_video_texture_load_wrap_d3d);
+#endif
 
    d3d9_video_texture_load_d3d(&info, &id);
    return id;
@@ -1984,7 +1961,7 @@ static void d3d9_set_video_mode(void *data,
       bool fullscreen)
 {
 #ifndef _XBOX
-   win32_show_cursor(!fullscreen);
+   win32_show_cursor(data, !fullscreen);
 #endif
 }
 
@@ -2026,7 +2003,7 @@ static const video_poke_interface_t d3d9_poke_interface = {
    d3d9_set_menu_texture_enable,
    d3d9_set_osd_msg,
 
-   d3d9_show_mouse,
+   win32_show_cursor,
    NULL,                         /* grab_mouse_toggle */
    NULL,                         /* get_current_shader */
    NULL,                         /* get_current_software_framebuffer */
@@ -2049,8 +2026,8 @@ static bool d3d9_has_windowed(void *data)
 #endif
 }
 
-#if defined(HAVE_MENU) && defined(HAVE_MENU_WIDGETS)
-static bool d3d9_menu_widgets_enabled(void *data)
+#ifdef HAVE_GFX_WIDGETS
+static bool d3d9_gfx_widgets_enabled(void *data)
 {
    (void)data;
    return false; /* currently disabled due to memory issues */
@@ -2081,7 +2058,7 @@ video_driver_t video_d3d9 = {
 #endif
    d3d9_get_poke_interface,
    NULL, /* wrap_type_to_enum */
-#if defined(HAVE_MENU) && defined(HAVE_MENU_WIDGETS)
-   d3d9_menu_widgets_enabled
+#ifdef HAVE_GFX_WIDGETS
+   d3d9_gfx_widgets_enabled
 #endif
 };

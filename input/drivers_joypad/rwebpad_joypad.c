@@ -27,8 +27,6 @@
 
 #define CLAMPDOUBLE(x) MIN(1.0, MAX(-1.0, (x)))
 
-static bool g_rwebpad_initialized;
-
 static EM_BOOL rwebpad_gamepad_cb(int event_type,
    const EmscriptenGamepadEvent *gamepad_event, void *user_data)
 {
@@ -48,55 +46,44 @@ static EM_BOOL rwebpad_gamepad_cb(int event_type,
    }
 
    if (event_type == EMSCRIPTEN_EVENT_GAMEPADCONNECTED)
-   {
-      if(!input_autoconfigure_connect(
+      input_autoconfigure_connect(
                gamepad_event->id,    /* name */
                NULL,                 /* display name */
                rwebpad_joypad.ident, /* driver */
                gamepad_event->index, /* idx */
                vid,                  /* vid */
-               pid))                 /* pid */
-         input_config_set_device_name(gamepad_event->index,
-            gamepad_event->id);
-   }
+               pid);                 /* pid */
    else if (event_type == EMSCRIPTEN_EVENT_GAMEPADDISCONNECTED)
-   {
       input_autoconfigure_disconnect(gamepad_event->index,
          rwebpad_joypad.ident);
-   }
 
    return EM_TRUE;
 }
 
 static bool rwebpad_joypad_init(void *data)
 {
-   int supported = emscripten_get_num_gamepads();
+   EMSCRIPTEN_RESULT r;
    (void)data;
 
-   if (supported == EMSCRIPTEN_RESULT_NOT_SUPPORTED)
+   r = emscripten_sample_gamepad_data();
+   if (r == EMSCRIPTEN_RESULT_NOT_SUPPORTED)
       return false;
 
-   if (!g_rwebpad_initialized)
+   /* callbacks needs to be registered for gamepads to connect */
+   r = emscripten_set_gamepadconnected_callback(NULL, false,
+      rwebpad_gamepad_cb);
+   if (r != EMSCRIPTEN_RESULT_SUCCESS)
    {
-      EMSCRIPTEN_RESULT r;
-      g_rwebpad_initialized = true;
+      RARCH_ERR(
+         "[EMSCRIPTEN/PAD] failed to create connect callback: %d\n", r);
+   }
 
-      /* callbacks needs to be registered for gamepads to connect */
-      r = emscripten_set_gamepadconnected_callback(NULL, false,
-         rwebpad_gamepad_cb);
-      if (r != EMSCRIPTEN_RESULT_SUCCESS)
-      {
-         RARCH_ERR(
-            "[EMSCRIPTEN/PAD] failed to create connect callback: %d\n", r);
-      }
-
-      r = emscripten_set_gamepaddisconnected_callback(NULL, false,
-         rwebpad_gamepad_cb);
-      if (r != EMSCRIPTEN_RESULT_SUCCESS)
-      {
-         RARCH_ERR(
-            "[EMSCRIPTEN/PAD] failed to create disconnect callback: %d\n", r);
-      }
+   r = emscripten_set_gamepaddisconnected_callback(NULL, false,
+      rwebpad_gamepad_cb);
+   if (r != EMSCRIPTEN_RESULT_SUCCESS)
+   {
+      RARCH_ERR(
+         "[EMSCRIPTEN/PAD] failed to create disconnect callback: %d\n", r);
    }
 
    return true;
@@ -105,22 +92,18 @@ static bool rwebpad_joypad_init(void *data)
 static const char *rwebpad_joypad_name(unsigned pad)
 {
    static EmscriptenGamepadEvent gamepad_state;
-   EMSCRIPTEN_RESULT r;
-
-   r = emscripten_get_gamepad_status(pad, &gamepad_state);
+   EMSCRIPTEN_RESULT r = emscripten_get_gamepad_status(pad, &gamepad_state);
 
    if (r == EMSCRIPTEN_RESULT_SUCCESS)
       return gamepad_state.id;
-   else
-      return "";
+   return "";
 }
 
 static bool rwebpad_joypad_button(unsigned port_num, uint16_t joykey)
 {
    EmscriptenGamepadEvent gamepad_state;
-   EMSCRIPTEN_RESULT r;
-
-   r = emscripten_get_gamepad_status(port_num, &gamepad_state);
+   EMSCRIPTEN_RESULT r = emscripten_get_gamepad_status(
+         port_num, &gamepad_state);
 
    if (r == EMSCRIPTEN_RESULT_SUCCESS)
       if (joykey < gamepad_state.numButtons)
@@ -137,7 +120,7 @@ static void rwebpad_joypad_get_buttons(unsigned port_num, input_bits_t *state)
 
    if (r == EMSCRIPTEN_RESULT_SUCCESS)
    {
-      int i;
+      unsigned i;
 
       for (i = 0; i < gamepad_state.numButtons; i++)
       {
@@ -181,16 +164,13 @@ static int16_t rwebpad_joypad_axis(unsigned port_num, uint32_t joyaxis)
 
 static void rwebpad_joypad_poll(void)
 {
-   /* this call makes emscripten poll gamepad state */
-   (void)emscripten_get_num_gamepads();
+   (void)emscripten_sample_gamepad_data();
 }
 
 static bool rwebpad_joypad_query_pad(unsigned pad)
 {
    EmscriptenGamepadEvent gamepad_state;
-   EMSCRIPTEN_RESULT r;
-
-   r = emscripten_get_gamepad_status(pad, &gamepad_state);
+   EMSCRIPTEN_RESULT r = emscripten_get_gamepad_status(pad, &gamepad_state);
 
    if (r == EMSCRIPTEN_RESULT_SUCCESS)
       return gamepad_state.connected == EM_TRUE;

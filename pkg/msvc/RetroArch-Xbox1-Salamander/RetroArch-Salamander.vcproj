@@ -288,9 +288,6 @@
 				RelativePath="..\..\..\frontend\frontend_salamander.c">
 			</File>
 			<File
-				RelativePath="..\..\..\frontend\drivers\platform_null.c">
-			</File>
-			<File
 				RelativePath="..\..\..\frontend\drivers\platform_xdk.c">
 			</File>
 			<File
@@ -338,12 +335,18 @@
 						RelativePath="..\..\..\libretro-common\file\file_path.c">
 					</File>
 					<File
+						RelativePath="..\..\..\libretro-common\file\file_path_io.c">
+					</File>
+					<File
 						RelativePath="..\..\..\libretro-common\file\retro_dirent.c">
 					</File>
 				</Filter>
 				<Filter
 					Name="string"
 					Filter="">
+					<File
+						RelativePath="..\..\..\libretro-common\string\stdstring.c">
+					</File>
 				</Filter>
 				<Filter
 					Name="streams"

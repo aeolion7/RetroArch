@@ -163,10 +163,7 @@ static bool orbis_ctx_set_video_mode(void *data,
 
 #ifdef HAVE_EGL
     if (!egl_create_context(&ctx_orbis->egl, contextAttributeList))
-    {
-        egl_report_error();
         goto error;
-    }
 #endif
 
 #ifdef HAVE_EGL
@@ -177,17 +174,19 @@ static bool orbis_ctx_set_video_mode(void *data,
     return true;
 
 error:
-    printf("[ctx_orbis]: EGL error: %d.\n", eglGetError());
+#ifdef HAVE_EGL
+    egl_report_error();
+#endif
     orbis_ctx_destroy(data);
 
     return false;
 }
 
 static void orbis_ctx_input_driver(void *data,
-                                    const char *name,
-                                    const input_driver_t **input, void **input_data)
+      const char *name,
+      input_driver_t **input, void **input_data)
 {
-    *input = NULL;
+    *input      = NULL;
     *input_data = NULL;
 }
 
@@ -197,14 +196,16 @@ static enum gfx_ctx_api orbis_ctx_get_api(void *data)
 }
 
 static bool orbis_ctx_bind_api(void *data,
-                                enum gfx_ctx_api api, unsigned major, unsigned minor)
+      enum gfx_ctx_api api, unsigned major, unsigned minor)
 {
     (void)data;
     ctx_orbis_api = api;
 
+#ifdef HAVE_EGL
     if (api == GFX_CTX_OPENGL_ES_API)
-        if (eglBindAPI(EGL_OPENGL_ES_API) != EGL_FALSE)
+        if (egl_bind_api(EGL_OPENGL_ES_API))
             return true;
+#endif
 
     return false;
 }
@@ -287,26 +288,6 @@ static float orbis_ctx_get_refresh_rate(void *data)
     return ctx_orbis->refresh_rate;
 }
 
-static void orbis_ctx_update_window_title(void *data, void *data2)
-{
-   const settings_t *settings = config_get_ptr();
-   video_frame_info_t* video_info = (video_frame_info_t*)data2;
-
-   if (settings->bools.video_memory_show)
-   {
-      uint64_t mem_bytes_used = frontend_driver_get_used_memory();
-      uint64_t mem_bytes_total = frontend_driver_get_total_memory();
-      char         mem[128];
-
-      mem[0] = '\0';
-
-      snprintf(
-            mem, sizeof(mem), " || MEM: %.2f/%.2fMB", mem_bytes_used / (1024.0f * 1024.0f),
-            mem_bytes_total / (1024.0f * 1024.0f));
-      strlcat(video_info->fps_text, mem, sizeof(video_info->fps_text));
-   }
-}
-
 const gfx_ctx_driver_t orbis_ctx = {
     orbis_ctx_init,
     orbis_ctx_destroy,
@@ -321,12 +302,12 @@ const gfx_ctx_driver_t orbis_ctx = {
     NULL, /* get_video_output_next */
     NULL, /* get_metrics */
     NULL,
-    orbis_ctx_update_window_title,
+    NULL, /* update_title */
     orbis_ctx_check_window,
     NULL, /* set_resize */
     orbis_ctx_has_focus,
     orbis_ctx_suppress_screensaver,
-    NULL, /* has_windowed */
+    false, /* has_windowed */
     orbis_ctx_swap_buffers,
     orbis_ctx_input_driver,
     orbis_ctx_get_proc_address,

@@ -45,6 +45,8 @@ static id apple_platform;
 #endif
 static CFRunLoopObserverRef iterate_observer;
 
+static size_t old_size = 0;
+
 /* forward declaration */
 static void apple_rarch_exited(void);
 
@@ -56,7 +58,7 @@ static void rarch_enable_ui(void)
 
    rarch_ctl(RARCH_CTL_SET_PAUSED, &boolean);
    rarch_ctl(RARCH_CTL_SET_IDLE,   &boolean);
-   rarch_menu_running();
+   retroarch_menu_running();
 }
 
 static void rarch_disable_ui(void)
@@ -67,23 +69,17 @@ static void rarch_disable_ui(void)
 
    rarch_ctl(RARCH_CTL_SET_PAUSED, &boolean);
    rarch_ctl(RARCH_CTL_SET_IDLE,   &boolean);
-   rarch_menu_running_finished(false);
+   retroarch_menu_running_finished(false);
 }
 
 static void ui_companion_cocoatouch_event_command(
-      void *data, enum event_command cmd)
-{
-    (void)data;
-}
+      void *data, enum event_command cmd) { }
 
 static void rarch_draw_observer(CFRunLoopObserverRef observer,
     CFRunLoopActivity activity, void *info)
 {
-   unsigned sleep_ms  = 0;
-   int          ret   = runloop_iterate(&sleep_ms);
+   int          ret   = runloop_iterate();
 
-   if (ret == 1 && !ui_companion_is_on_foreground() && sleep_ms > 0)
-      retro_sleep(sleep_ms);
    task_queue_check();
 
    if (ret == -1)
@@ -389,9 +385,10 @@ enum
 
 - (void)applicationDidBecomeActive:(UIApplication *)application
 {
-   settings_t *settings = config_get_ptr();
+   settings_t *settings            = config_get_ptr();
+   bool ui_companion_start_on_boot = settings->bools.ui_companion_start_on_boot;
 
-   if (settings->bools.ui_companion_start_on_boot)
+   if (ui_companion_start_on_boot)
       return;
 
   [self showGameView];
@@ -403,7 +400,6 @@ enum
                   ^{
                   ui_companion_cocoatouch_event_command(NULL, CMD_EVENT_MENU_SAVE_CURRENT_CONFIG);
                   });
-   [self showPauseMenu: self];
 }
 
 -(BOOL)application:(UIApplication *)application openURL:(NSURL *)url sourceApplication:(NSString *)sourceApplication annotation:(id)annotation
@@ -534,18 +530,6 @@ int main(int argc, char *argv[])
    }
 }
 
-#if 0
-static void apple_display_alert(const char *message, const char *title)
-{
-   UIAlertView* alert = [[UIAlertView alloc] initWithTitle:BOXSTRING(title)
-                                             message:BOXSTRING(message)
-                                             delegate:nil
-                                             cancelButtonTitle:BOXSTRING("OK")
-                                             otherButtonTitles:nil];
-   [alert show];
-}
-#endif
-
 static void apple_rarch_exited(void)
 {
     RetroArch_iOS *ap = (RetroArch_iOS *)apple_platform;
@@ -580,18 +564,6 @@ static void ui_companion_cocoatouch_toggle(void *data, bool force)
       [ap toggleUI];
 }
 
-static int ui_companion_cocoatouch_iterate(void *data, unsigned action)
-{
-   RetroArch_iOS *ap  = (RetroArch_iOS*)apple_platform;
-
-   (void)data;
-
-   if (ap)
-      [ap showPauseMenu:ap];
-
-   return 0;
-}
-
 static void ui_companion_cocoatouch_deinit(void *data)
 {
    ui_companion_cocoatouch_t *handle = (ui_companion_cocoatouch_t*)data;
@@ -614,8 +586,6 @@ static void *ui_companion_cocoatouch_init(void)
 
    return handle;
 }
-
-static size_t old_size = 0;
 
 static void ui_companion_cocoatouch_notify_list_pushed(void *data,
    file_list_t *list, file_list_t *menu_list)
@@ -679,7 +649,6 @@ static void ui_companion_cocoatouch_msg_queue_push(void *data, const char *msg,
 ui_companion_driver_t ui_companion_cocoatouch = {
    ui_companion_cocoatouch_init,
    ui_companion_cocoatouch_deinit,
-   ui_companion_cocoatouch_iterate,
    ui_companion_cocoatouch_toggle,
    ui_companion_cocoatouch_event_command,
    ui_companion_cocoatouch_notify_content_loaded,
@@ -689,9 +658,9 @@ ui_companion_driver_t ui_companion_cocoatouch = {
    ui_companion_cocoatouch_render_messagebox,
    NULL, /* get_main_window */
    NULL, /* log_msg */
-   &ui_browser_window_null,
-   &ui_msg_window_null,
-   &ui_window_null,
-   &ui_application_null,
+   NULL, /* ui_browser_window_null */
+   NULL, /* ui_msg_window_null */
+   NULL, /* ui_window_null */
+   NULL, /* ui_application_null */
    "cocoatouch",
 };

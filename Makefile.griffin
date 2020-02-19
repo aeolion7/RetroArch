@@ -93,7 +93,7 @@ else ifeq ($(platform), wii)
    libogc_platform    := 1
 endif
 
-HAVE_MENU_WIDGETS := 1
+HAVE_GFX_WIDGETS := 1
 
 # PS3
 ifeq ($(platform), ps3)
@@ -117,7 +117,7 @@ else ifeq ($(libogc_platform), 1)
    EXT_TARGET := $(TARGET_NAME)_$(platform).dol
    EXT_INTER_TARGET := $(TARGET_NAME)_$(platform).elf
 
-   INCLUDE += -I. -I$(DEVKITPRO)/libogc/include -Ideps/libz -Iwii/libogc/include
+   INCLUDE += -I. -I$(DEVKITPRO)/libogc/include -Iwii/libogc/include
 
    ifeq ($(EXTERNAL_LIBOGC), 1)
       CFLAGS   += -DEXTERNAL_LIBOGC
@@ -184,6 +184,7 @@ else ifeq ($(libogc_platform), 1)
 
    CFLAGS += -DGEKKO -U__INT32_TYPE__ -U __UINT32_TYPE__ -D__INT32_TYPE__=int
 
+	HAVE_AUDIOMIXER			 := 1
    HAVE_RUNAHEAD            := 1
    HAVE_FILTERS_BUILTIN     := 1
    HAVE_THREADS             := 1
@@ -194,14 +195,14 @@ else ifeq ($(libogc_platform), 1)
    HAVE_IBXM                := 1
    HAVE_OVERLAY             := 1
    HAVE_VIDEO_LAYOUT        := 0
-   HAVE_BUILTINZLIB         := 1
    HAVE_ZLIB                := 1
-   WANT_ZLIB                := 1
    HAVE_7ZIP                := 1
+	HAVE_CONFIGFILE          := 1
    RARCH_CONSOLE             = 1
 
    ifeq ($(platform), wii)
-      #HAVE_LANGEXTRA           := 1
+		HAVE_AUDIOMIXER			 := 1
+      #HAVE_LANGEXTRA          := 1
       HAVE_WIIUSB_HID          := 1
       HAVE_RARCH_EXEC          := 1
       HAVE_RSOUND              := 1
@@ -236,6 +237,7 @@ else ifeq ($(platform), xenon360)
    HAVE_THREADS             := 1
    HAVE_GETOPT_LONG         := 1
    RARCH_CONSOLE             = 1
+	HAVE_CONFIGFILE          := 1
 
 # PSP
 else ifeq ($(platform), psp1)
@@ -260,6 +262,7 @@ else ifeq ($(platform), psp1)
    HAVE_KERNEL_PRX          := 1
    #HAVE_LANGEXTRA          := 1
    RARCH_CONSOLE             = 1
+	HAVE_CONFIGFILE          := 1
 
    ifeq ($(BUILD_PRX), 1)
       LDFLAGS += $(addprefix -L,$(PSPSDK)/lib) -specs=$(PSPSDK)/lib/prxspecs -Wl,-q,-T$(PSPSDK)/lib/linkfile.prx $(LDFLAGS)
@@ -273,9 +276,7 @@ else ifeq ($(platform), vita)
    EXT_TARGET := $(TARGET_NAME)_$(platform).velf
    EXT_INTER_TARGET := $(TARGET_NAME)_$(platform).elf
    MACHDEP := -DVITA
-   WANT_ZLIB                := 1
    INCLUDE += -Ideps/libvita2d/include
-   INCLUDE += -Ideps/libz
    PLATCFLAGS := -mfloat-abi=hard -fsingle-precision-constant \
         -mword-relocations -fno-unwind-tables -fno-asynchronous-unwind-tables -ftree-vectorize -fno-optimize-sibling-calls
    LIBS += -lSceDisplay_stub -lSceGxm_stub -lSceNet_stub -lSceNetCtl_stub\
@@ -307,7 +308,6 @@ else ifeq ($(platform), vita)
    HAVE_RJPEG               := 1
    HAVE_RBMP                := 1
    HAVE_RTGA                := 1
-   HAVE_BUILTINZLIB         := 1
    HAVE_ZLIB                := 1
    HAVE_7ZIP                := 1
    HAVE_VITA2D              := 1
@@ -320,17 +320,17 @@ else ifeq ($(platform), vita)
    HAVE_THREADS             := 1
    HAVE_LIBRETRODB          := 1
    RARCH_CONSOLE             = 1
+	HAVE_CONFIGFILE          := 1
 else ifeq ($(platform), windows_msvc6_x86)
    HAVE_RPNG                := 1
    HAVE_RJPEG               := 1
    HAVE_RBMP                := 1
    HAVE_RTGA                := 1
    HAVE_ZLIB                := 1
-   WANT_ZLIB                := 1
    HAVE_7ZIP                := 1
    HAVE_NETWORKING          := 0
    HAVE_NETWORK_CMD         := 1
-	HAVE_NETPLAYDISCOVERY    := 1
+   HAVE_NETPLAYDISCOVERY    := 1
    HAVE_OVERLAY             := 1
    HAVE_VIDEO_LAYOUT        := 0
    HAVE_MATERIALUI          := 1
@@ -344,6 +344,7 @@ else ifeq ($(platform), windows_msvc6_x86)
    HAVE_DYLIB               := 1
    HAVE_DYNAMIC             := 1
    HAVE_GRIFFIN_CPP         := 1
+	HAVE_CONFIGFILE          := 1
 
    EXT_TARGET := $(TARGET_NAME).exe
    EXT_INTER_TARGET := $(TARGET_NAME).exe
@@ -364,17 +365,16 @@ else ifeq ($(platform), windows_msvc6_x86)
    export INCLUDE := $(INCLUDE);$(INETSDK)\Include;libretro-common\include;libretro-common\include\compat\msvc;gfx\include;deps;deps\stb
    export LIB := $(LIB);$(INETSDK)\Lib
 else ifeq ($(platform), windows_msvc2003_x86)
+   HAVE_GDI                 := 1
    HAVE_RPNG                := 1
    HAVE_RJPEG               := 1
    HAVE_RBMP                := 1
    HAVE_RTGA                := 1
-   HAVE_BUILTINZLIB         := 1
    HAVE_ZLIB                := 1
-   WANT_ZLIB                := 1
    HAVE_7ZIP                := 1
    HAVE_NETWORKING          := 1
    HAVE_NETWORK_CMD         := 1
-	HAVE_NETPLAYDISCOVERY    := 1
+   HAVE_NETPLAYDISCOVERY    := 1
    HAVE_OVERLAY             := 1
    HAVE_VIDEO_LAYOUT        := 0
    HAVE_MATERIALUI          := 1
@@ -388,6 +388,7 @@ else ifeq ($(platform), windows_msvc2003_x86)
    HAVE_DYLIB               := 1
    HAVE_DYNAMIC             := 1
    HAVE_GRIFFIN_CPP         := 1
+	HAVE_CONFIGFILE          := 1
 
    EXT_TARGET := $(TARGET_NAME).exe
    EXT_INTER_TARGET := $(TARGET_NAME).exe
@@ -413,17 +414,16 @@ else ifeq ($(platform), windows_msvc2003_x86)
       export LIB := $(LIB);$(INETSDK)\Lib
    endif
 else ifeq ($(platform), windows_msvc2005_x86)
+   HAVE_GDI                 := 1
    HAVE_RPNG                := 1
    HAVE_RJPEG               := 1
    HAVE_RBMP                := 1
    HAVE_RTGA                := 1
-   HAVE_BUILTINZLIB         := 1
    HAVE_ZLIB                := 1
-   WANT_ZLIB                := 1
    HAVE_7ZIP                := 1
    HAVE_NETWORKING          := 1
    HAVE_NETWORK_CMD         := 1
-	HAVE_NETPLAYDISCOVERY    := 1
+   HAVE_NETPLAYDISCOVERY    := 1
    HAVE_OVERLAY             := 1
    HAVE_VIDEO_LAYOUT        := 0
    HAVE_MATERIALUI          := 1
@@ -438,6 +438,7 @@ else ifeq ($(platform), windows_msvc2005_x86)
    HAVE_DYNAMIC             := 1
    HAVE_GRIFFIN_CPP         := 1
    HAVE_DIRECTX             ?= 1
+	HAVE_CONFIGFILE          := 1
 
    EXT_TARGET := $(TARGET_NAME).exe
    EXT_INTER_TARGET := $(TARGET_NAME).exe
@@ -445,7 +446,7 @@ else ifeq ($(platform), windows_msvc2005_x86)
    CXX = cl.exe
    LD = link.exe
 
-   PLATCFLAGS += -D_WIN32 -D_WIN32_WINNT=0x0410 -D__STDC_CONSTANT_MACROS -D_MBCS -DHAVE_EASTEREGG -D__MMX__ -D__SSE__ -DHAVE_OPENGL -DHAVE_OPENGL1 -DHAVE_GLSL -DHAVE_SHADERPIPELINE -DHAVE_OZONE
+   PLATCFLAGS += -D_WIN32 -D_WIN32_WINNT=0x0410 -D__STDC_CONSTANT_MACROS -D_MBCS -D__MMX__ -D__SSE__ -DHAVE_OPENGL -DHAVE_OPENGL1 -DHAVE_GLSL -DHAVE_SHADERPIPELINE -DHAVE_OZONE
    LDFLAGS += shell32.lib user32.lib gdi32.lib comdlg32.lib winmm.lib ole32.lib msimg32.lib
 
    PATH := $(shell IFS=$$'\n'; cygpath "$(VS80COMNTOOLS)../../VC/bin"):$(PATH)
@@ -463,13 +464,13 @@ else ifeq ($(platform), windows_msvc2005_x86)
       export LIB := $(LIB);$(INETSDK)\Lib
    endif
 else ifneq (,$(findstring windows_msvc2010,$(platform)))
+   HAVE_GDI                 := 1
+   HAVE_AUDIOMIXER          := 1
    HAVE_RPNG                := 1
    HAVE_RJPEG               := 1
    HAVE_RBMP                := 1
    HAVE_RTGA                := 1
-   HAVE_BUILTINZLIB         := 1
    HAVE_ZLIB                := 1
-   WANT_ZLIB                := 1
    HAVE_7ZIP                := 1
    HAVE_NETWORKING          := 1
    HAVE_NETWORK_CMD         := 1
@@ -489,6 +490,7 @@ else ifneq (,$(findstring windows_msvc2010,$(platform)))
    HAVE_GRIFFIN_CPP         := 1
    HAVE_RUNAHEAD            := 1
    HAVE_DIRECTX             ?= 1
+	HAVE_CONFIGFILE          := 1
 
    EXT_TARGET := $(TARGET_NAME).exe
    EXT_INTER_TARGET := $(TARGET_NAME).exe
@@ -497,7 +499,7 @@ else ifneq (,$(findstring windows_msvc2010,$(platform)))
    LD = link.exe
 
    PLATCFLAGS += -D_WIN32 -D__STDC_CONSTANT_MACROS -D_MBCS
-   PLATCFLAGS += -D__i686__ -D__MMX__ -D__SSE__ -D_CRT_NONSTDC_NO_WARNINGS -D_CRT_SECURE_NO_WARNINGS -D_WINDOWS -DHAVE_CC_RESAMPLER -DHAVE_GL_SYNC -DHAVE_GLSL -DHAVE_IMAGEVIEWER -DHAVE_LANGEXTRA -DHAVE_OPENGL -DHAVE_SHADERPIPELINE -DHAVE_UPDATE_ASSETS -DWIN32 -DHAVE_EASTEREGG -DHAVE_CDROM
+   PLATCFLAGS += -D__i686__ -D__MMX__ -D__SSE__ -D_CRT_NONSTDC_NO_WARNINGS -D_CRT_SECURE_NO_WARNINGS -D_WINDOWS -DHAVE_CC_RESAMPLER -DHAVE_GL_SYNC -DHAVE_GLSL -DHAVE_IMAGEVIEWER -DHAVE_LANGEXTRA -DHAVE_OPENGL -DHAVE_SHADERPIPELINE -DHAVE_ONLINE_UPDATER -DHAVE_UPDATE_ASSETS -DHAVE_UPDATE_CORES -DWIN32 -DHAVE_CDROM
    LDFLAGS += shell32.lib user32.lib gdi32.lib comdlg32.lib winmm.lib ole32.lib iphlpapi.lib msimg32.lib
 
    PlatformSuffix = $(subst windows_msvc2010_,,$(platform))
@@ -537,13 +539,13 @@ else ifneq (,$(findstring windows_msvc2010,$(platform)))
       export LIB := $(LIB);$(WindowsSdkDir)\$(PlatLib)
    endif
 else ifneq (,$(findstring windows_msvc2012,$(platform)))
+   HAVE_GDI                 := 1
+   HAVE_AUDIOMIXER          := 1
    HAVE_RPNG                := 1
    HAVE_RJPEG               := 1
    HAVE_RBMP                := 1
    HAVE_RTGA                := 1
-   HAVE_BUILTINZLIB         := 1
    HAVE_ZLIB                := 1
-   WANT_ZLIB                := 1
    HAVE_7ZIP                := 1
    HAVE_NETWORKING          := 1
    HAVE_NETWORK_CMD         := 1
@@ -563,6 +565,7 @@ else ifneq (,$(findstring windows_msvc2012,$(platform)))
    HAVE_GRIFFIN_CPP         := 1
    HAVE_RUNAHEAD            := 1
    HAVE_DIRECTX             ?= 1
+	HAVE_CONFIGFILE          := 1
 
    EXT_TARGET := $(TARGET_NAME).exe
    EXT_INTER_TARGET := $(TARGET_NAME).exe
@@ -571,7 +574,7 @@ else ifneq (,$(findstring windows_msvc2012,$(platform)))
    LD = link.exe
 
    PLATCFLAGS += -D_WIN32 -D__STDC_CONSTANT_MACROS -D_MBCS
-   PLATCFLAGS += -D__i686__ -D__MMX__ -D__SSE__ -D_CRT_NONSTDC_NO_WARNINGS -D_CRT_SECURE_NO_WARNINGS -D_WINDOWS -DHAVE_CC_RESAMPLER -DHAVE_GL_SYNC -DHAVE_GLSL -DHAVE_IMAGEVIEWER -DHAVE_LANGEXTRA -DHAVE_OPENGL -DHAVE_SHADERPIPELINE -DHAVE_UPDATE_ASSETS -DWIN32 -DHAVE_EASTEREGG -DHAVE_CDROM
+   PLATCFLAGS += -D__i686__ -D__MMX__ -D__SSE__ -D_CRT_NONSTDC_NO_WARNINGS -D_CRT_SECURE_NO_WARNINGS -D_WINDOWS -DHAVE_CC_RESAMPLER -DHAVE_GL_SYNC -DHAVE_GLSL -DHAVE_IMAGEVIEWER -DHAVE_LANGEXTRA -DHAVE_OPENGL -DHAVE_SHADERPIPELINE -DHAVE_ONLINE_UPDATER -DHAVE_UPDATE_ASSETS -DHAVE_UPDATE_CORES -DWIN32 -DHAVE_CDROM
    LDFLAGS += shell32.lib user32.lib gdi32.lib comdlg32.lib winmm.lib ole32.lib iphlpapi.lib
 
    PlatformSuffix = $(subst windows_msvc2012_,,$(platform))
@@ -615,13 +618,13 @@ else ifneq (,$(findstring windows_msvc2012,$(platform)))
       export LIB := $(LIB);$(WindowsSdkDir)\$(PlatLib)
    endif
 else ifneq (,$(findstring windows_msvc2013,$(platform)))
+   HAVE_GDI                 := 1
+   HAVE_AUDIOMIXER          := 1
    HAVE_RPNG                := 1
    HAVE_RJPEG               := 1
    HAVE_RBMP                := 1
    HAVE_RTGA                := 1
-   HAVE_BUILTINZLIB         := 1
    HAVE_ZLIB                := 1
-   WANT_ZLIB                := 1
    HAVE_7ZIP                := 1
    HAVE_NETWORKING          := 1
    HAVE_NETWORK_CMD         := 1
@@ -641,6 +644,7 @@ else ifneq (,$(findstring windows_msvc2013,$(platform)))
    HAVE_GRIFFIN_CPP         := 1
    HAVE_RUNAHEAD            := 1
    HAVE_DIRECTX             ?= 1
+	HAVE_CONFIGFILE          := 1
 
    EXT_TARGET := $(TARGET_NAME).exe
    EXT_INTER_TARGET := $(TARGET_NAME).exe
@@ -649,7 +653,7 @@ else ifneq (,$(findstring windows_msvc2013,$(platform)))
    LD = link.exe
 
    PLATCFLAGS += -D_WIN32 -D__STDC_CONSTANT_MACROS -D_MBCS
-   PLATCFLAGS += -D__i686__ -D__MMX__ -D__SSE__ -D_CRT_NONSTDC_NO_WARNINGS -D_CRT_SECURE_NO_WARNINGS -D_WINDOWS -DHAVE_CC_RESAMPLER -DHAVE_GL_SYNC -DHAVE_GLSL -DHAVE_IMAGEVIEWER -DHAVE_LANGEXTRA -DHAVE_OPENGL -DHAVE_SHADERPIPELINE -DHAVE_UPDATE_ASSETS -DWIN32 -DHAVE_EASTEREGG -DHAVE_CDROM
+   PLATCFLAGS += -D__i686__ -D__MMX__ -D__SSE__ -D_CRT_NONSTDC_NO_WARNINGS -D_CRT_SECURE_NO_WARNINGS -D_WINDOWS -DHAVE_CC_RESAMPLER -DHAVE_GL_SYNC -DHAVE_GLSL -DHAVE_IMAGEVIEWER -DHAVE_LANGEXTRA -DHAVE_OPENGL -DHAVE_SHADERPIPELINE -DHAVE_ONLINE_UPDATER -DHAVE_UPDATE_ASSETS -DHAVE_UPDATE_CORES -DWIN32 -DHAVE_CDROM
    LDFLAGS += shell32.lib user32.lib gdi32.lib comdlg32.lib winmm.lib ole32.lib iphlpapi.lib
 
    PlatformSuffix = $(subst windows_msvc2013_,,$(platform))
@@ -693,13 +697,13 @@ else ifneq (,$(findstring windows_msvc2013,$(platform)))
       export LIB := $(LIB);$(WindowsSdkDir)\$(PlatLib)
    endif
 else ifneq (,$(findstring windows_msvc2015,$(platform)))
+   HAVE_GDI                 := 1
+   HAVE_AUDIOMIXER          := 1
    HAVE_RPNG                := 1
    HAVE_RJPEG               := 1
    HAVE_RBMP                := 1
    HAVE_RTGA                := 1
-   HAVE_BUILTINZLIB         := 1
    HAVE_ZLIB                := 1
-   WANT_ZLIB                := 1
    HAVE_7ZIP                := 1
    HAVE_NETWORKING          := 1
    HAVE_NETWORK_CMD         := 1
@@ -719,6 +723,7 @@ else ifneq (,$(findstring windows_msvc2015,$(platform)))
    HAVE_GRIFFIN_CPP         := 1
    HAVE_RUNAHEAD            := 1
    HAVE_DIRECTX             ?= 1
+	HAVE_CONFIGFILE          := 1
 
    EXT_TARGET := $(TARGET_NAME).exe
    EXT_INTER_TARGET := $(TARGET_NAME).exe
@@ -728,7 +733,7 @@ else ifneq (,$(findstring windows_msvc2015,$(platform)))
 
    PLATCFLAGS += -utf-8
    PLATCFLAGS += -D_WIN32 -D__STDC_CONSTANT_MACROS -D_MBCS
-   PLATCFLAGS += -D__i686__ -D__MMX__ -D__SSE__ -D_CRT_NONSTDC_NO_WARNINGS -D_CRT_SECURE_NO_WARNINGS -D_WINDOWS -DHAVE_CC_RESAMPLER -DHAVE_GL_SYNC -DHAVE_GLSL -DHAVE_IMAGEVIEWER -DHAVE_LANGEXTRA -DHAVE_OPENGL -DHAVE_SHADERPIPELINE -DHAVE_UPDATE_ASSETS -DWIN32 -DHAVE_EASTEREGG -DHAVE_CDROM
+   PLATCFLAGS += -D__i686__ -D__MMX__ -D__SSE__ -D_CRT_NONSTDC_NO_WARNINGS -D_CRT_SECURE_NO_WARNINGS -D_WINDOWS -DHAVE_CC_RESAMPLER -DHAVE_GL_SYNC -DHAVE_GLSL -DHAVE_IMAGEVIEWER -DHAVE_LANGEXTRA -DHAVE_OPENGL -DHAVE_SHADERPIPELINE -DHAVE_ONLINE_UPDATER -DHAVE_UPDATE_ASSETS -DHAVE_UPDATE_CORES -DWIN32 -DHAVE_CDROM
    LDFLAGS += shell32.lib user32.lib gdi32.lib comdlg32.lib winmm.lib ole32.lib iphlpapi.lib
 
    PlatformSuffix = $(subst windows_msvc2015_,,$(platform))
@@ -787,13 +792,12 @@ else ifneq (,$(findstring windows_msvc2015,$(platform)))
       export LIB := $(LIB)
    endif
 else ifneq (,$(findstring unix,$(platform)))
+   HAVE_AUDIOMIXER          := 1
    HAVE_RPNG                := 1
    HAVE_RJPEG               := 1
    HAVE_RBMP                := 1
    HAVE_RTGA                := 1
-   HAVE_BUILTINZLIB         := 1
    HAVE_ZLIB                := 1
-   WANT_ZLIB                := 1
    HAVE_7ZIP                := 1
    HAVE_NETWORKING          := 1
    HAVE_NETWORK_CMD         := 1
@@ -811,9 +815,10 @@ else ifneq (,$(findstring unix,$(platform)))
    HAVE_DYLIB               := 1
    HAVE_DYNAMIC             := 1
    HAVE_GRIFFIN_CPP         := 1
-   WANT_GLSLANG							:= 1
+   WANT_GLSLANG             := 1
+	HAVE_CONFIGFILE          := 1
 
-   PLATCFLAGS += -DHAVE_EASTEREGG -D__MMX__ -D__SSE__ -DHAVE_OPENGL -DHAVE_OPENGL1 -DHAVE_GLSL -DHAVE_SHADERPIPELINE -DHAVE_OZONE -DHAVE_CC_RESAMPLER -DHAVE_CHEEVOS -DRC_DISABLE_LUA -DHAVE_FBO -DHAVE_GL_SYNC -DHAVE_SLANG -DHAVE_GLSLANG -DHAVE_IMAGEVIEWER -DHAVE_LANGEXTRA -DHAVE_RUNAHEAD -DHAVE_MENU_WIDGETS -DHAVE_SPIRV_CROSS -DHAVE_STB_FONT -DHAVE_UPDATE_ASSETS -DHAVE_VULKAN -DHAVE_XMB -DRARCH_INTERNAL -DWANT_GLSLANG -DHAVE_X11 -DHAVE_XCB -DHAVE_UDEV -DHAVE_PULSE
+   PLATCFLAGS += -D__MMX__ -D__SSE__ -DHAVE_OPENGL -DHAVE_OPENGL1 -DHAVE_GLSL -DHAVE_SHADERPIPELINE -DHAVE_OZONE -DHAVE_CC_RESAMPLER -DHAVE_CHEEVOS -DRC_DISABLE_LUA -DHAVE_FBO -DHAVE_GL_SYNC -DHAVE_SLANG -DHAVE_GLSLANG -DHAVE_BUILTINGLSLANG -DHAVE_IMAGEVIEWER -DHAVE_LANGEXTRA -DHAVE_RUNAHEAD -DHAVE_GFX_WIDGETS -DHAVE_CONFIGFILE -DHAVE_SPIRV_CROSS -DHAVE_STB_FONT -DHAVE_ONLINE_UPDATER -DHAVE_UPDATE_ASSETS -DHAVE_UPDATE_CORES -DHAVE_VULKAN -DHAVE_XMB -DRARCH_INTERNAL -DWANT_GLSLANG -DHAVE_X11 -DHAVE_XCB -DHAVE_UDEV -DHAVE_PULSE
    EXT_TARGET := $(TARGET_NAME)
    EXT_INTER_TARGET := $(TARGET_NAME)
    INCLUDE += -Ilibretro-common/include -Igfx/include -Ideps -Ideps/stb -Ideps/rcheevos/include -Ideps/SPIRV-Cross -Ideps/glslang -I.
@@ -821,7 +826,7 @@ else ifneq (,$(findstring unix,$(platform)))
 endif
 
 ifneq (,$(findstring msvc,$(platform)))
-   CFLAGS += -W2 $(MACHDEP) $(PLATCFLAGS)
+   CFLAGS += -W3 $(MACHDEP) $(PLATCFLAGS)
 else
    CFLAGS += -Wall -std=gnu99 $(MACHDEP) $(PLATCFLAGS) $(INCLUDE)
    INCLUDE += -I./libretro-common/include \
@@ -886,11 +891,7 @@ endif
 
 ifeq ($(HAVE_ZLIB), 1)
    CFLAGS      += -DHAVE_ZLIB
-   CFLAGS += -I./libretro-common/include/compat/zlib
-endif
-
-ifeq ($(WANT_ZLIB), 1)
-   CFLAGS      += -DWANT_ZLIB
+   CFLAGS      += -I./libretro-common/include/compat/zlib
 endif
 
 ifeq ($(HAVE_RPNG), 1)
@@ -915,6 +916,10 @@ endif
 
 ifeq ($(HAVE_7ZIP), 1)
    CFLAGS      += -DHAVE_7ZIP
+endif
+
+ifeq ($(HAVE_AUDIOMIXER), 1)
+   CFLAGS      += -DHAVE_AUDIOMIXER
 endif
 
 ifeq ($(HAVE_OVERLAY), 1)
@@ -977,6 +982,10 @@ ifeq ($(HAVE_THREADS), 1)
    ifeq ($(platform), vita)
       LIBS += -lpthread
    endif
+endif
+
+ifeq ($(HAVE_CONFIGFILE), 1)
+   CFLAGS += -DHAVE_CONFIGFILE
 endif
 
 ifeq ($(HAVE_RSOUND), 1)

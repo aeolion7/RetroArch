@@ -15,6 +15,7 @@
 #include "../../switch_performance_profiles.h"
 #include "../../configuration.h"
 #include <unistd.h>
+#include <malloc.h>
 #else
 #include <libtransistor/nx.h>
 #include <libtransistor/ipc_helpers.h>
@@ -55,8 +56,6 @@
 static enum frontend_fork switch_fork_mode = FRONTEND_FORK_NONE;
 static const char *elf_path_cst = "/switch/retroarch_switch.nro";
 
-static uint64_t frontend_switch_get_mem_used(void);
-
 bool platform_switch_has_focus = true;
 
 #ifdef HAVE_LIBNX
@@ -64,7 +63,7 @@ bool platform_switch_has_focus = true;
 /* Splash */
 static uint32_t *splashData = NULL;
 
-static bool psmInitialized = false;
+static bool psmInitialized  = false;
 
 static AppletHookCookie applet_hook_cookie;
 
@@ -72,67 +71,85 @@ static AppletHookCookie applet_hook_cookie;
 extern bool nxlink_connected;
 #endif
 
-void libnx_apply_overclock() {
-   const size_t profiles_count = sizeof(SWITCH_CPU_PROFILES) / sizeof(SWITCH_CPU_PROFILES[1]);
-   if (config_get_ptr()->uints.libnx_overclock >= 0 && config_get_ptr()->uints.libnx_overclock <= profiles_count){
-      if(hosversionBefore(8, 0, 0)) {
-         pcvSetClockRate(PcvModule_CpuBus, SWITCH_CPU_SPEEDS_VALUES[config_get_ptr()->uints.libnx_overclock]);
-      } else {
+void libnx_apply_overclock(void)
+{
+   const size_t profiles_count = sizeof(SWITCH_CPU_PROFILES) 
+      / sizeof(SWITCH_CPU_PROFILES[1]);
+   settings_t *settings        = config_get_ptr();
+   unsigned libnx_overclock    = settings->uints.libnx_overclock;
+
+   if (libnx_overclock >= 0 && libnx_overclock <= profiles_count)
+   {
+      if (hosversionBefore(8, 0, 0))
+      {
+         pcvSetClockRate(PcvModule_CpuBus, SWITCH_CPU_SPEEDS_VALUES[
+               libnx_overclock]);
+      }
+      else
+      {
          ClkrstSession session = {0};
          clkrstOpenSession(&session, PcvModuleId_CpuBus, 3);
-         clkrstSetClockRate(&session, SWITCH_CPU_SPEEDS_VALUES[config_get_ptr()->uints.libnx_overclock]);
+         clkrstSetClockRate(&session, SWITCH_CPU_SPEEDS_VALUES[libnx_overclock]);
          clkrstCloseSession(&session);
       }
    }
 }
 
-static void on_applet_hook(AppletHookType hook, void *param) {
-   u32 performance_mode;
+static void on_applet_hook(AppletHookType hook, void *param)
+{
    AppletFocusState focus_state;
 
    /* Exit request */
    switch (hook)
    {
-   case AppletHookType_OnExitRequest:
-      RARCH_LOG("Got AppletHook OnExitRequest, exiting.\n");
-      retroarch_main_quit();
-      break;
+      case AppletHookType_OnExitRequest:
+         RARCH_LOG("Got AppletHook OnExitRequest, exiting.\n");
+         retroarch_main_quit();
+         break;
 
-   /* Focus state*/
-   case AppletHookType_OnFocusState:
-      focus_state = appletGetFocusState();
-      RARCH_LOG("Got AppletHook OnFocusState - new focus state is %d\n", focus_state);
-      platform_switch_has_focus = focus_state == AppletFocusState_Focused;
-      if(!platform_switch_has_focus) {
-         if(hosversionBefore(8, 0, 0)) {
-            pcvSetClockRate(PcvModule_CpuBus, 1020000000);
-         } else {
-            ClkrstSession session = {0};
-            clkrstOpenSession(&session, PcvModuleId_CpuBus, 3);
-            clkrstSetClockRate(&session, 1020000000);
-            clkrstCloseSession(&session);
+         /* Focus state*/
+      case AppletHookType_OnFocusState:
+         focus_state = appletGetFocusState();
+         RARCH_LOG("Got AppletHook OnFocusState - new focus state is %d\n", focus_state);
+         platform_switch_has_focus = focus_state == AppletFocusState_Focused;
+
+         if (!platform_switch_has_focus)
+         {
+            if (hosversionBefore(8, 0, 0))
+            {
+               pcvSetClockRate(PcvModule_CpuBus, 1020000000);
+            }
+            else
+            {
+               ClkrstSession session = {0};
+               clkrstOpenSession(&session, PcvModuleId_CpuBus, 3);
+               clkrstSetClockRate(&session, 1020000000);
+               clkrstCloseSession(&session);
+            }
          }
-      } else {
+         else
+            libnx_apply_overclock();
+         break;
+
+         /* Performance mode */
+      case AppletHookType_OnPerformanceMode:
+         {
+            /* 0 == Handheld, 1 == Docked
+             * Since CPU doesn't change we just re-apply */
+            u32 performance_mode = appletGetPerformanceMode();
+         }
          libnx_apply_overclock();
-      }
-      break;
+         break;
 
-   /* Performance mode */
-   case AppletHookType_OnPerformanceMode:
-      // 0 == Handheld, 1 == Docked
-      // Since CPU doesn't change we just re-apply
-      performance_mode = appletGetPerformanceMode();
-      libnx_apply_overclock();
-      break;
-
-   default:
-      break;
+      default:
+         break;
    }
 }
 
 #endif /* HAVE_LIBNX */
 
-static void get_first_valid_core(char *path_return)
+#ifdef IS_SALAMANDER
+static void get_first_valid_core(char *path_return, size_t len)
 {
    DIR *dir;
    struct dirent *ent;
@@ -141,25 +158,27 @@ static void get_first_valid_core(char *path_return)
    path_return[0] = '\0';
 
    dir = opendir(SD_PREFIX "/retroarch/cores");
-   if (dir != NULL)
+   if (dir)
    {
-      while ((ent = readdir(dir)) != NULL)
+      while ((ent = readdir(dir)))
       {
-         if (ent == NULL)
+         if (!ent)
             break;
          if (strlen(ent->d_name) > strlen(extension) && !strcmp(ent->d_name + strlen(ent->d_name) - strlen(extension), extension))
          {
-            strcpy(path_return, SD_PREFIX "/retroarch/cores");
-            strcat(path_return, "/");
-            strcat(path_return, ent->d_name);
+            strlcpy(path_return, SD_PREFIX "/retroarch/cores", len);
+            strlcat(path_return, "/", len);
+            strlcat(path_return, ent->d_name, len);
             break;
          }
       }
       closedir(dir);
    }
 }
+#endif
 
-static void frontend_switch_get_environment_settings(int *argc, char *argv[], void *args, void *params_data)
+static void frontend_switch_get_environment_settings(
+      int *argc, char *argv[], void *args, void *params_data)
 {
    unsigned i;
    (void)args;
@@ -267,10 +286,13 @@ static void frontend_switch_deinit(void *data)
 #ifdef HAVE_LIBNX
    nifmExit();
 
-   if(hosversionBefore(8, 0, 0)) {
+   if (hosversionBefore(8, 0, 0))
+   {
       pcvSetClockRate(PcvModule_CpuBus, 1020000000);
       pcvExit();
-   } else {
+   }
+   else
+   {
       ClkrstSession session = {0};
       clkrstOpenSession(&session, PcvModuleId_CpuBus, 3);
       clkrstSetClockRate(&session, 1020000000);
@@ -300,21 +322,24 @@ static void frontend_switch_deinit(void *data)
 static void frontend_switch_exec(const char *path, bool should_load_game)
 {
    char game_path[PATH_MAX-4];
+#ifndef IS_SALAMANDER
    const char *arg_data[3];
    int args           = 0;
-
-   game_path[0]       = NULL;
    arg_data[0]        = NULL;
 
    arg_data[args]     = elf_path_cst;
    arg_data[args + 1] = NULL;
    args++;
+#endif
+
+   game_path[0]       = NULL;
 
    RARCH_LOG("Attempt to load core: [%s].\n", path);
+
 #ifndef IS_SALAMANDER
    if (should_load_game && !path_is_empty(RARCH_PATH_CONTENT))
    {
-      strcpy(game_path, path_get(RARCH_PATH_CONTENT));
+      strlcpy(game_path, path_get(RARCH_PATH_CONTENT), sizeof(game_path));
       arg_data[args] = game_path;
       arg_data[args + 1] = NULL;
       args++;
@@ -333,7 +358,7 @@ static void frontend_switch_exec(const char *path, bool should_load_game)
          char core_path[PATH_MAX];
 
          /* find first valid core and load it if the target core doesnt exist */
-         get_first_valid_core(&core_path[0]);
+         get_first_valid_core(&core_path[0], PATH_MAX);
 
          if (core_path[0] == '\0')
             svcExitProcess();
@@ -377,9 +402,9 @@ static bool frontend_switch_set_fork(enum frontend_fork fork_mode)
 }
 #endif
 
-static void frontend_switch_exitspawn(char *s, size_t len)
+static void frontend_switch_exitspawn(char *s, size_t len, char *args)
 {
-   bool should_load_game = false;
+   bool should_load_content = false;
 #ifndef IS_SALAMANDER
    if (switch_fork_mode == FRONTEND_FORK_NONE)
       return;
@@ -387,13 +412,13 @@ static void frontend_switch_exitspawn(char *s, size_t len)
    switch (switch_fork_mode)
    {
    case FRONTEND_FORK_CORE_WITH_ARGS:
-      should_load_game = true;
+      should_load_content = true;
       break;
    default:
       break;
    }
 #endif
-   frontend_switch_exec(s, should_load_game);
+   frontend_switch_exec(s, should_load_content);
 }
 
 #if 0
@@ -549,26 +574,21 @@ ssize_t readlink(const char *restrict path, char *restrict buf, size_t bufsize)
 /* Taken from glibc */
 char *realpath(const char *name, char *resolved)
 {
-   char *rpath, *dest, *extra_buf = NULL;
+   char *rpath, *dest = NULL;
    const char *start, *end, *rpath_limit;
    long int path_max;
-   int num_links = 0;
 
-   if (name == NULL)
-   {
-      /* As per Single Unix Specification V2 we must return an error if
-       either parameter is a null pointer.  We extend this to allow
-       the RESOLVED parameter to be NULL in case the we are expected to
-       allocate the room for the return value.  */
+   /* As per Single Unix Specification V2 we must return an error if
+      either parameter is a null pointer.  We extend this to allow
+      the RESOLVED parameter to be NULL in case the we are expected to
+      allocate the room for the return value.  */
+   if (!name)
       return NULL;
-   }
 
+   /* As per Single Unix Specification V2 we must return an error if
+      the name argument points to an empty string.  */
    if (name[0] == '\0')
-   {
-      /* As per Single Unix Specification V2 we must return an error if
-       the name argument points to an empty string.  */
       return NULL;
-   }
 
 #ifdef PATH_MAX
    path_max = PATH_MAX;
@@ -578,10 +598,10 @@ char *realpath(const char *name, char *resolved)
       path_max = 1024;
 #endif
 
-   if (resolved == NULL)
+   if (!resolved)
    {
       rpath = malloc(path_max);
-      if (rpath == NULL)
+      if (!rpath)
          return NULL;
    }
    else
@@ -605,8 +625,6 @@ char *realpath(const char *name, char *resolved)
 
    for (start = end = name; *start; start = end)
    {
-      int n;
-
       /* Skip sequence of multiple path-separators.  */
       while (*start == '/')
          ++start;
@@ -651,7 +669,7 @@ char *realpath(const char *name, char *resolved)
             else
                new_size += path_max;
             new_rpath = (char *)realloc(rpath, new_size);
-            if (new_rpath == NULL)
+            if (!new_rpath)
                goto error;
             rpath = new_rpath;
             rpath_limit = rpath + new_size;
@@ -670,7 +688,7 @@ char *realpath(const char *name, char *resolved)
    return rpath;
 
 error:
-   if (resolved == NULL)
+   if (!resolved)
       free(rpath);
    return NULL;
 }
@@ -689,12 +707,10 @@ static void frontend_switch_init(void *data)
 {
 #ifdef HAVE_LIBNX
    bool recording_supported      = false;
-   uint32_t width                = 0;
-   uint32_t height               = 0;
 
-   nifmInitialize();
+   nifmInitialize(NifmServiceType_User);
    
-   if(hosversionBefore(8, 0, 0))
+   if (hosversionBefore(8, 0, 0))
       pcvInitialize();
    else
       clkrstInitialize();
@@ -704,7 +720,7 @@ static void frontend_switch_init(void *data)
    appletSetFocusHandlingMode(AppletFocusHandlingMode_NoSuspend);
 
    appletIsGamePlayRecordingSupported(&recording_supported);
-   if(recording_supported)
+   if (recording_supported)
       appletInitializeGamePlayRecording();
 
 #ifdef NXLINK
@@ -723,65 +739,6 @@ static void frontend_switch_init(void *data)
    {
        RARCH_WARN("Error initializing psm\n");
    }
-
-#if 0
-#ifndef HAVE_OPENGL
-   /* Load splash */
-   if (!splashData)
-   {
-      rarch_system_info_t *sys_info = runloop_get_system_info();
-      retro_get_system_info(sys_info);
-
-      if (sys_info)
-      {
-         const char *core_name       = sys_info->info.library_name;
-         char *full_core_splash_path = (char*)malloc(PATH_MAX);
-
-         snprintf(full_core_splash_path,
-               PATH_MAX, "/retroarch/rgui/splash/%s.png", core_name);
-
-         rpng_load_image_argb((const char *)
-               full_core_splash_path, &splashData, &width, &height);
-
-         if (splashData)
-         {
-            argb_to_rgba8(splashData, height, width);
-            frontend_switch_showsplash();
-         }
-         else
-         {
-            rpng_load_image_argb(
-                  "/retroarch/rgui/splash/RetroArch.png",
-                  &splashData, &width, &height);
-
-            if (splashData)
-            {
-               argb_to_rgba8(splashData, height, width);
-               frontend_switch_showsplash();
-            }
-         }
-
-         free(full_core_splash_path);
-      }
-      else
-      {
-         rpng_load_image_argb(
-               "/retroarch/rgui/splash/RetroArch.png",
-               &splashData, &width, &height);
-
-         if (splashData)
-         {
-            argb_to_rgba8(splashData, height, width);
-            frontend_switch_showsplash();
-         }
-      }
-   }
-   else
-   {
-      frontend_switch_showsplash();
-   }
-#endif
-#endif
 
 #endif /* HAVE_LIBNX (splash) */
 }
@@ -802,7 +759,7 @@ static int frontend_switch_parse_drive_list(void *data, bool load_content)
    file_list_t *list = (file_list_t *)data;
    enum msg_hash_enums enum_idx = load_content 
       ? MENU_ENUM_LABEL_FILE_DETECT_CORE_LIST_PUSH_DIR 
-      : MSG_UNKNOWN;
+      : MENU_ENUM_LABEL_FILE_BROWSER_DIRECTORY;
 
    if (!list)
       return -1;
@@ -816,21 +773,16 @@ static int frontend_switch_parse_drive_list(void *data, bool load_content)
    return 0;
 }
 
-static uint64_t frontend_switch_get_mem_total(void)
+static uint64_t frontend_switch_get_mem_free(void)
 {
-   uint64_t memoryTotal = 0;
-   svcGetInfo(&memoryTotal, 6, 0xffff8001, 0);
-   memoryTotal += frontend_switch_get_mem_used();
-
-   return memoryTotal;
+   struct mallinfo mem_info = mallinfo();
+   return mem_info.fordblks;
 }
 
-static uint64_t frontend_switch_get_mem_used(void)
+static uint64_t frontend_switch_get_mem_total(void)
 {
-   uint64_t memoryUsed = 0;
-   svcGetInfo(&memoryUsed, 7, 0xffff8001, 0);
-
-   return memoryUsed;
+   struct mallinfo mem_info = mallinfo();
+   return mem_info.usmblks;
 }
 
 static enum frontend_powerstate 
@@ -962,7 +914,7 @@ frontend_ctx_driver_t frontend_ctx_switch =
         frontend_switch_get_powerstate,
         frontend_switch_parse_drive_list,
         frontend_switch_get_mem_total,
-        frontend_switch_get_mem_used,
+        frontend_switch_get_mem_free,
         NULL, /* install_signal_handler */
         NULL, /* get_signal_handler_state */
         NULL, /* set_signal_handler_state */
@@ -974,5 +926,7 @@ frontend_ctx_driver_t frontend_ctx_switch =
         NULL, /* set_sustained_performance_mode */
         NULL, /* get_cpu_model_name */
         NULL, /* get_user_language */
+        NULL, /* is_narrator_running */
+        NULL, /* accessibility_speak */
         "switch",
 };

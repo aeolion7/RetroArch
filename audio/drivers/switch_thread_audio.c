@@ -39,7 +39,6 @@ static const size_t thread_stack_size = 1024 * 8;
 static const int thread_preferred_cpu = 2;
 static const int channel_count = 2;
 static const size_t sample_size = sizeof(uint16_t);
-static const size_t frame_size = channel_count * sample_size;
 
 #define AUDIO_BUFFER_COUNT 2
 
@@ -53,7 +52,7 @@ typedef struct
    size_t fifoSize;
 
    volatile bool running;
-   bool nonblocking;
+   bool nonblock;
    bool is_paused;
 
    compat_audio_out_buffer buffers[AUDIO_BUFFER_COUNT];
@@ -144,15 +143,17 @@ static void *switch_thread_audio_init(const char *device, unsigned rate, unsigne
    Result rc;
    unsigned i;
    uint32_t prio;
+#ifndef HAVE_LIBNX
    char names[8][0x20];
    uint32_t num_names  = 0;
+#endif
    switch_thread_audio_t *swa = (switch_thread_audio_t *)calloc(1, sizeof(*swa));
 
    if (!swa)
       return NULL;
 
    swa->running     = true;
-   swa->nonblocking = true;
+   swa->nonblock    = true;
    swa->is_paused   = true;
    swa->latency     = MAX(latency, 8);
 
@@ -217,7 +218,7 @@ static void *switch_thread_audio_init(const char *device, unsigned rate, unsigne
       swa->buffers[i].data_size   = swa->buffers[i].buffer_size;
       swa->buffers[i].buffer      = memalign(0x1000, swa->buffers[i].buffer_size);
 
-      if (swa->buffers[i].buffer == NULL)
+      if (!swa->buffers[i].buffer)
          goto fail;
 
       memset(swa->buffers[i].buffer, 0, swa->buffers[i].buffer_size);
@@ -228,7 +229,7 @@ static void *switch_thread_audio_init(const char *device, unsigned rate, unsigne
       swa->buffers[i].data_size   = swa->buffers[i].buffer_size;
       swa->buffers[i].sample_data = alloc_pages(swa->buffers[i].buffer_size, swa->buffers[i].buffer_size, NULL);
 
-      if (swa->buffers[i].sample_data == NULL)
+      if (!swa->buffers[i].sample_data)
 	      goto fail_audio_output;
 
       memset(swa->buffers[i].sample_data, 0, swa->buffers[i].buffer_size);
@@ -345,7 +346,7 @@ static ssize_t switch_thread_audio_write(void *data, const void *buf, size_t siz
    if (!swa || !swa->running)
          return 0;
 
-   if (swa->nonblocking)
+   if (swa->nonblock)
    {
       compat_mutex_lock(&swa->fifoLock);
       avail = fifo_write_avail(swa->fifo);
@@ -397,7 +398,7 @@ static void switch_thread_audio_set_nonblock_state(void *data, bool state)
    switch_thread_audio_t *swa = (switch_thread_audio_t *)data;
 
    if (swa)
-      swa->nonblocking = state;
+      swa->nonblock = state;
 }
 
 static bool switch_thread_audio_use_float(void *data)

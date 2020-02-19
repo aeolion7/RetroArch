@@ -60,32 +60,33 @@
 static enum frontend_fork ctr_fork_mode = FRONTEND_FORK_NONE;
 static const char* elf_path_cst         = "sdmc:/retroarch/retroarch.3dsx";
 
-static void get_first_valid_core(char* path_return)
+#ifdef IS_SALAMANDER
+static void get_first_valid_core(char* path_return, size_t len)
 {
-   DIR* dir;
    struct dirent* ent;
    const char* extension = envIsHomebrew() ? ".3dsx" : ".cia";
+   DIR              *dir = opendir("sdmc:/retroarch/cores");
 
-   path_return[0] = '\0';
+   path_return[0]        = '\0';
 
-   dir = opendir("sdmc:/retroarch/cores");
-   if (dir != NULL)
+   if (dir)
    {
       while (ent = readdir(dir))
       {
-         if (ent == NULL)
+         if (!ent)
             break;
-         if (strlen(ent->d_name) > strlen(extension) && !strcmp(ent->d_name + strlen(ent->d_name) - strlen(extension), extension))
+         if (strlen(ent->d_name) > strlen(extension) 
+               && !strcmp(ent->d_name + strlen(ent->d_name) - strlen(extension), extension))
          {
-            strcpy(path_return, "sdmc:/retroarch/cores");
-            strcat(path_return, "/");
-            strcat(path_return, ent->d_name);
+            strlcpy(path_return, "sdmc:/retroarch/cores/", len);
+            strlcat(path_return, ent->d_name, len);
             break;
          }
       }
       closedir(dir);
    }
 }
+#endif
 
 static void frontend_ctr_get_environment_settings(int* argc, char* argv[],
       void* args, void* params_data)
@@ -212,7 +213,7 @@ static void frontend_ctr_exec(const char* path, bool should_load_game)
 #ifndef IS_SALAMANDER
    if (should_load_game && !path_is_empty(RARCH_PATH_CONTENT))
    {
-      strcpy(game_path, path_get(RARCH_PATH_CONTENT));
+      strlcpy(game_path, path_get(RARCH_PATH_CONTENT), sizeof(game_path));
       arg_data[args] = game_path;
       arg_data[args + 1] = NULL;
       args++;
@@ -233,7 +234,7 @@ static void frontend_ctr_exec(const char* path, bool should_load_game)
          core_path[0] = '\0';
 
          /* find first valid core and load it if the target core doesnt exist */
-         get_first_valid_core(&core_path[0]);
+         get_first_valid_core(&core_path[0], sizeof(core_path));
 
          if (core_path[0] == '\0')
          {
@@ -299,7 +300,7 @@ static bool frontend_ctr_set_fork(enum frontend_fork fork_mode)
 }
 #endif
 
-static void frontend_ctr_exitspawn(char* s, size_t len)
+static void frontend_ctr_exitspawn(char* s, size_t len, char *args)
 {
    bool should_load_game = false;
 #ifndef IS_SALAMANDER
@@ -396,6 +397,8 @@ void gfxSetFramebufferInfo(gfxScreen_t screen, u8 id);
 static void frontend_ctr_init(void* data)
 {
 #ifndef IS_SALAMANDER
+   extern audio_driver_t audio_null;
+
    (void)data;
 
    verbosity_enable();
@@ -483,7 +486,7 @@ static int frontend_ctr_parse_drive_list(void* data, bool load_content)
    file_list_t* list = (file_list_t*)data;
    enum msg_hash_enums enum_idx = load_content
       ? MENU_ENUM_LABEL_FILE_DETECT_CORE_LIST_PUSH_DIR
-      : MSG_UNKNOWN;
+      : MENU_ENUM_LABEL_FILE_BROWSER_DIRECTORY;
 
    if (!list)
       return -1;
@@ -504,9 +507,9 @@ static uint64_t frontend_ctr_get_mem_total(void)
    return osGetMemRegionSize(MEMREGION_ALL);
 }
 
-static uint64_t frontend_ctr_get_mem_used(void)
+static uint64_t frontend_ctr_get_mem_free(void)
 {
-   return osGetMemRegionUsed(MEMREGION_ALL);
+   return osGetMemRegionFree(MEMREGION_ALL);
 }
 
 static enum frontend_powerstate frontend_ctr_get_powerstate(
@@ -609,7 +612,7 @@ frontend_ctx_driver_t frontend_ctx_ctr =
    frontend_ctr_get_powerstate,
    frontend_ctr_parse_drive_list,
    frontend_ctr_get_mem_total,
-   frontend_ctr_get_mem_used,
+   frontend_ctr_get_mem_free,
    NULL,                         /* install_signal_handler */
    NULL,                         /* get_signal_handler_state */
    NULL,                         /* set_signal_handler_state */
@@ -621,5 +624,7 @@ frontend_ctx_driver_t frontend_ctx_ctr =
    NULL,                         /* set_sustained_performance_mode */
    NULL,                         /* get_cpu_model_name */
    NULL,                         /* get_user_language */
+   NULL,                         /* is_narrator_running */
+   NULL,                         /* accessibility_speak */
    "ctr",
 };

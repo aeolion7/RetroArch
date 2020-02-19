@@ -28,16 +28,15 @@
 #include <features/features_cpu.h>
 
 #include "../../menu_input.h"
-#include "../../menu_animation.h"
+#include "../../../gfx/gfx_animation.h"
 
-#include "../../widgets/menu_input_dialog.h"
 #include "../../widgets/menu_osk.h"
 
 static void ozone_cursor_animation_cb(void *userdata);
 
 static void ozone_animate_cursor(ozone_handle_t *ozone, float *dst, float *target)
 {
-   menu_animation_ctx_entry_t entry;
+   gfx_animation_ctx_entry_t entry;
    int i;
 
    entry.easing_enum = EASING_OUT_QUAD;
@@ -58,7 +57,7 @@ static void ozone_animate_cursor(ozone_handle_t *ozone, float *dst, float *targe
       entry.subject        = &dst[i];
       entry.target_value   = target[i];
 
-      menu_animation_push(&entry);
+      gfx_animation_push(&entry);
    }
 }
 
@@ -85,14 +84,14 @@ static void ozone_cursor_animation_cb(void *userdata)
 
 void ozone_restart_cursor_animation(ozone_handle_t *ozone)
 {
-   menu_animation_ctx_tag tag = (uintptr_t) &ozone_default_theme;
+   gfx_animation_ctx_tag tag = (uintptr_t) &ozone_default_theme;
 
    if (!ozone->has_all_assets)
       return;
 
    ozone->theme_dynamic.cursor_state = 1;
    memcpy(ozone->theme_dynamic.cursor_border, ozone->theme->cursor_border_0, sizeof(ozone->theme_dynamic.cursor_border));
-   menu_animation_kill_by_tag(&tag);
+   gfx_animation_kill_by_tag(&tag);
 
    ozone_animate_cursor(ozone, ozone->theme_dynamic.cursor_border, ozone->theme->cursor_border_1);
 }
@@ -107,7 +106,7 @@ void ozone_draw_text(
       uint32_t color,
       bool draw_outside)
 {
-   menu_display_draw_text(font, str, x, y,
+   gfx_display_draw_text(font, str, x, y,
          width, height, color, text_align, 1.0f,
          false,
          1.0, draw_outside);
@@ -119,40 +118,46 @@ static void ozone_draw_cursor_slice(ozone_handle_t *ozone,
       unsigned width, unsigned height,
       size_t y, float alpha)
 {
-   menu_display_set_alpha(ozone->theme_dynamic.cursor_alpha, alpha);
-   menu_display_set_alpha(ozone->theme_dynamic.cursor_border, alpha);
+   float scale_factor   = ozone->last_scale_factor;
+   int slice_x          = x_offset - 14 * scale_factor;
+   int slice_y          = (int)y + 8 * scale_factor;
+   unsigned slice_new_w = width + (3 + 28 - 4) * scale_factor;
+   unsigned slice_new_h = height + 20 * scale_factor;
 
-   menu_display_blend_begin(video_info);
+   gfx_display_set_alpha(ozone->theme_dynamic.cursor_alpha, alpha);
+   gfx_display_set_alpha(ozone->theme_dynamic.cursor_border, alpha);
+
+   gfx_display_blend_begin(video_info);
 
    /* Cursor without border */
-   menu_display_draw_texture_slice(
+   gfx_display_draw_texture_slice(
       video_info,
-      x_offset - 14,
-      (int)(y + 8),
+      slice_x,
+      slice_y,
       80, 80,
-      width + 3 + 28 - 4,
-      height + 20,
+      slice_new_w,
+      slice_new_h,
       video_info->width, video_info->height,
       ozone->theme_dynamic.cursor_alpha,
-      20, 1.0,
+      20, scale_factor,
       ozone->theme->textures[OZONE_THEME_TEXTURE_CURSOR_NO_BORDER]
    );
 
    /* Tainted border */
-   menu_display_draw_texture_slice(
+   gfx_display_draw_texture_slice(
       video_info,
-      x_offset - 14,
-      (int)(y + 8),
+      slice_x,
+      slice_y,
       80, 80,
-      width + 3 + 28 - 4,
-      height + 20,
+      slice_new_w,
+      slice_new_h,
       video_info->width, video_info->height,
       ozone->theme_dynamic.cursor_border,
-      20, 1.0,
+      20, scale_factor,
       ozone->textures[OZONE_TEXTURE_CURSOR_BORDER]
    );
 
-   menu_display_blend_end(video_info);
+   gfx_display_blend_end(video_info);
 }
 
 static void ozone_draw_cursor_fallback(ozone_handle_t *ozone,
@@ -161,25 +166,25 @@ static void ozone_draw_cursor_fallback(ozone_handle_t *ozone,
       unsigned width, unsigned height,
       size_t y, float alpha)
 {
-   menu_display_set_alpha(ozone->theme_dynamic.selection_border, alpha);
-   menu_display_set_alpha(ozone->theme_dynamic.selection, alpha);
+   gfx_display_set_alpha(ozone->theme_dynamic.selection_border, alpha);
+   gfx_display_set_alpha(ozone->theme_dynamic.selection, alpha);
 
    /* Fill */
-   menu_display_draw_quad(video_info, x_offset, (int)y, width, height - 5, video_info->width, video_info->height, ozone->theme_dynamic.selection);
+   gfx_display_draw_quad(video_info, x_offset, (int)y, width, height - ozone->dimensions.spacer_5px, video_info->width, video_info->height, ozone->theme_dynamic.selection);
 
    /* Borders (can't do one single quad because of alpha) */
 
    /* Top */
-   menu_display_draw_quad(video_info, x_offset - 3, (int)(y - 3), width + 6, 3, video_info->width, video_info->height, ozone->theme_dynamic.selection_border);
+   gfx_display_draw_quad(video_info, x_offset - ozone->dimensions.spacer_3px, (int)(y - ozone->dimensions.spacer_3px), width + ozone->dimensions.spacer_3px * 2, ozone->dimensions.spacer_3px, video_info->width, video_info->height, ozone->theme_dynamic.selection_border);
 
    /* Bottom */
-   menu_display_draw_quad(video_info, x_offset - 3, (int)(y + height - 5), width + 6, 3, video_info->width, video_info->height, ozone->theme_dynamic.selection_border);
+   gfx_display_draw_quad(video_info, x_offset - ozone->dimensions.spacer_3px, (int)(y + height - ozone->dimensions.spacer_5px), width + ozone->dimensions.spacer_3px * 2, ozone->dimensions.spacer_3px, video_info->width, video_info->height, ozone->theme_dynamic.selection_border);
 
    /* Left */
-   menu_display_draw_quad(video_info, (int)(x_offset - 3), (int)y, 3, height - 5, video_info->width, video_info->height, ozone->theme_dynamic.selection_border);
+   gfx_display_draw_quad(video_info, (int)(x_offset - ozone->dimensions.spacer_3px), (int)y, ozone->dimensions.spacer_3px, height - ozone->dimensions.spacer_5px, video_info->width, video_info->height, ozone->theme_dynamic.selection_border);
 
    /* Right */
-   menu_display_draw_quad(video_info, x_offset + width, (int)y, 3, height - 5, video_info->width, video_info->height, ozone->theme_dynamic.selection_border);
+   gfx_display_draw_quad(video_info, x_offset + width, (int)y, ozone->dimensions.spacer_3px, height - ozone->dimensions.spacer_5px, video_info->width, video_info->height, ozone->theme_dynamic.selection_border);
 }
 
 void ozone_draw_cursor(ozone_handle_t *ozone,
@@ -204,8 +209,8 @@ void ozone_draw_icon(
       float rotation, float scale_factor,
       float *color)
 {
-   menu_display_ctx_rotate_draw_t rotate_draw;
-   menu_display_ctx_draw_t draw;
+   gfx_display_ctx_rotate_draw_t rotate_draw;
+   gfx_display_ctx_draw_t draw;
    struct video_coords coords;
    math_matrix_4x4 mymat;
 
@@ -216,7 +221,7 @@ void ozone_draw_icon(
    rotate_draw.scale_z      = 1;
    rotate_draw.scale_enable = true;
 
-   menu_display_rotate_z(&rotate_draw, video_info);
+   gfx_display_rotate_z(&rotate_draw, video_info);
 
    coords.vertices      = 4;
    coords.vertex        = NULL;
@@ -233,17 +238,17 @@ void ozone_draw_icon(
    draw.coords          = &coords;
    draw.matrix_data     = &mymat;
    draw.texture         = texture;
-   draw.prim_type       = MENU_DISPLAY_PRIM_TRIANGLESTRIP;
+   draw.prim_type       = GFX_DISPLAY_PRIM_TRIANGLESTRIP;
    draw.pipeline.id     = 0;
 
-   menu_display_draw(&draw, video_info);
+   gfx_display_draw(&draw, video_info);
 }
 
 void ozone_draw_backdrop(video_frame_info_t *video_info, float alpha)
 {
    /* TODO: Replace this backdrop by a blur shader on the whole screen if available */
-   menu_display_set_alpha(ozone_backdrop, alpha);
-   menu_display_draw_quad(video_info, 0, 0, video_info->width, video_info->height, video_info->width, video_info->height, ozone_backdrop);
+   gfx_display_set_alpha(ozone_backdrop, alpha);
+   gfx_display_draw_quad(video_info, 0, 0, video_info->width, video_info->height, video_info->width, video_info->height, ozone_backdrop);
 }
 
 void ozone_draw_osk(ozone_handle_t *ozone,
@@ -256,8 +261,9 @@ void ozone_draw_osk(ozone_handle_t *ozone,
    unsigned text_color;
    struct string_list *list;
 
-   unsigned margin         = 75;
-   unsigned padding        = 10;
+   float scale_factor      = ozone->last_scale_factor;
+   unsigned margin         = 75 * scale_factor;
+   unsigned padding        = 10 * scale_factor;
    unsigned bottom_end     = video_info->height/2;
    unsigned y_offset       = 0;
    bool draw_placeholder   = string_is_empty(str);
@@ -273,20 +279,20 @@ void ozone_draw_osk(ozone_handle_t *ozone,
 
    /* Border */
    /* Top */
-   menu_display_draw_quad(video_info, margin, margin, video_info->width - margin*2, 1, video_info->width, video_info->height, ozone->theme->entries_border);
+   gfx_display_draw_quad(video_info, margin, margin, video_info->width - margin*2, ozone->dimensions.spacer_1px, video_info->width, video_info->height, ozone->theme->entries_border);
 
    /* Bottom */
-   menu_display_draw_quad(video_info, margin, bottom_end - margin, video_info->width - margin*2, 1, video_info->width, video_info->height, ozone->theme->entries_border);
+   gfx_display_draw_quad(video_info, margin, bottom_end - margin, video_info->width - margin*2, ozone->dimensions.spacer_1px, video_info->width, video_info->height, ozone->theme->entries_border);
 
    /* Left */
-   menu_display_draw_quad(video_info, margin, margin, 1, bottom_end - margin*2, video_info->width, video_info->height, ozone->theme->entries_border);
+   gfx_display_draw_quad(video_info, margin, margin, ozone->dimensions.spacer_1px, bottom_end - margin*2, video_info->width, video_info->height, ozone->theme->entries_border);
 
    /* Right */
-   menu_display_draw_quad(video_info, video_info->width - margin, margin, 1, bottom_end - margin*2, video_info->width, video_info->height, ozone->theme->entries_border);
+   gfx_display_draw_quad(video_info, video_info->width - margin, margin, ozone->dimensions.spacer_1px, bottom_end - margin*2, video_info->width, video_info->height, ozone->theme->entries_border);
 
    /* Backdrop */
    /* TODO: Remove the backdrop if blur shader is available */
-   menu_display_draw_quad(video_info, margin + 1, margin + 1, video_info->width - margin*2 - 2, bottom_end - margin*2 - 2, video_info->width, video_info->height, ozone_osk_backdrop);
+   gfx_display_draw_quad(video_info, margin + ozone->dimensions.spacer_1px, margin + ozone->dimensions.spacer_1px, video_info->width - margin*2 - ozone->dimensions.spacer_2px, bottom_end - margin*2 - ozone->dimensions.spacer_2px, video_info->width, video_info->height, ozone_osk_backdrop);
 
    /* Placeholder & text*/
    if (!draw_placeholder)
@@ -308,7 +314,7 @@ void ozone_draw_osk(ozone_handle_t *ozone,
    {
       const char *msg = list->elems[i].data;
 
-      ozone_draw_text(video_info, ozone, msg, margin + padding * 2, margin + padding + FONT_SIZE_ENTRIES_LABEL + y_offset, TEXT_ALIGN_LEFT, video_info->width, video_info->height, ozone->fonts.entries_label, text_color, false);
+      ozone_draw_text(video_info, ozone, msg, margin + padding * 2, margin + padding + ozone->sublabel_font_glyph_height + y_offset, TEXT_ALIGN_LEFT, video_info->width, video_info->height, ozone->fonts.entries_label, text_color, false);
 
       /* Cursor */
       if (i == list->size - 1)
@@ -316,17 +322,17 @@ void ozone_draw_osk(ozone_handle_t *ozone,
          if (ozone->osk_cursor)
          {
             unsigned cursor_x = draw_placeholder ? 0 : font_driver_get_message_width(ozone->fonts.entries_label, msg, (unsigned)strlen(msg), 1);
-            menu_display_draw_quad(video_info, margin + padding*2 + cursor_x, margin + padding + y_offset + 3, 1, 25, video_info->width, video_info->height, ozone_pure_white);
+            gfx_display_draw_quad(video_info, margin + padding*2 + cursor_x, margin + padding + y_offset + ozone->dimensions.spacer_3px, ozone->dimensions.spacer_1px, 25 * scale_factor, video_info->width, video_info->height, ozone_pure_white);
          }
       }
       else
       {
-         y_offset += 25;
+         y_offset += 25 * scale_factor;
       }
    }
 
    /* Keyboard */
-   menu_display_draw_keyboard(
+   gfx_display_draw_keyboard(
             ozone->theme->textures[OZONE_THEME_TEXTURE_CURSOR_STATIC],
             ozone->fonts.entries_label,
             video_info,
@@ -343,11 +349,11 @@ void ozone_draw_messagebox(ozone_handle_t *ozone,
 {
    unsigned i, y_position;
    int x, y, longest = 0, longest_width = 0;
-   float line_height        = 0;
    unsigned width           = video_info->width;
    unsigned height          = video_info->height;
    struct string_list *list = !string_is_empty(message)
       ? string_split(message, "\n") : NULL;
+   float scale_factor       = ozone->last_scale_factor;
 
    if (!list || !ozone || !ozone->fonts.footer)
    {
@@ -359,14 +365,12 @@ void ozone_draw_messagebox(ozone_handle_t *ozone,
    if (list->elems == 0)
       goto end;
 
-   line_height      = 25;
-
    y_position       = height / 2;
    if (menu_input_dialog_get_display_kb())
       y_position    = height / 4;
 
    x                = width  / 2;
-   y                = y_position - (list->size-1) * line_height / 2;
+   y                = y_position - (list->size * ozone->footer_font_glyph_height) / 2;
 
    /* find the longest line width */
    for (i = 0; i < list->size; i++)
@@ -382,23 +386,29 @@ void ozone_draw_messagebox(ozone_handle_t *ozone,
       }
    }
 
-   menu_display_set_alpha(ozone->theme_dynamic.message_background, ozone->animations.messagebox_alpha);
+   gfx_display_set_alpha(ozone->theme_dynamic.message_background, ozone->animations.messagebox_alpha);
 
-   menu_display_blend_begin(video_info);
+   gfx_display_blend_begin(video_info);
 
    if (ozone->has_all_assets) /* avoid drawing a black box if there's no assets */
-      menu_display_draw_texture_slice(
+   {
+      int slice_x          = x - longest_width/2 - 48 * scale_factor;
+      unsigned slice_new_w = longest_width + 48 * 2 * scale_factor;
+      unsigned slice_new_h = ozone->footer_font_glyph_height * (list->size + 2);
+
+      gfx_display_draw_texture_slice(
          video_info,
-         x - longest_width/2 - 48,
-         y + 16 - 48,
+         slice_x,
+         y,
          256, 256,
-         longest_width + 48 * 2,
-         line_height * list->size + 48 * 2,
+         slice_new_w,
+         slice_new_h,
          width, height,
          ozone->theme_dynamic.message_background,
-         16, 1.0,
+         16, scale_factor,
          ozone->icons_textures[OZONE_ENTRIES_ICONS_TEXTURE_DIALOG_SLICE]
       );
+   }
 
    for (i = 0; i < list->size; i++)
    {
@@ -408,7 +418,7 @@ void ozone_draw_messagebox(ozone_handle_t *ozone,
          ozone_draw_text(video_info, ozone,
             msg,
             x - longest_width/2.0,
-            y + (i+0.75) * line_height,
+            y + (i + 1) * ozone->footer_font_glyph_height,
             TEXT_ALIGN_LEFT,
             width, height,
             ozone->fonts.footer,
@@ -419,4 +429,281 @@ void ozone_draw_messagebox(ozone_handle_t *ozone,
 
 end:
    string_list_free(list);
+}
+
+void ozone_draw_fullscreen_thumbnails(
+      ozone_handle_t *ozone, video_frame_info_t *video_info)
+{
+   /* Check whether fullscreen thumbnails are visible */
+   if (ozone->animations.fullscreen_thumbnail_alpha > 0.0f)
+   {
+      /* Note: right thumbnail is drawn at the top
+       * in the sidebar, so it becomes the *left*
+       * thumbnail when viewed fullscreen */
+      gfx_thumbnail_t *right_thumbnail = &ozone->thumbnails.left;
+      gfx_thumbnail_t *left_thumbnail  = &ozone->thumbnails.right;
+      unsigned width                    = video_info->width;
+      unsigned height                   = video_info->height;
+      int view_width                    = (int)width;
+      int view_height                   = (int)height - ozone->dimensions.header_height - ozone->dimensions.footer_height - ozone->dimensions.spacer_1px;
+      int thumbnail_margin              = ozone->dimensions.fullscreen_thumbnail_padding;
+      bool show_right_thumbnail         = false;
+      bool show_left_thumbnail          = false;
+      unsigned num_thumbnails           = 0;
+      float right_thumbnail_draw_width  = 0.0f;
+      float right_thumbnail_draw_height = 0.0f;
+      float left_thumbnail_draw_width   = 0.0f;
+      float left_thumbnail_draw_height  = 0.0f;
+      float background_alpha            = 0.85f;
+      float background_color[16]        = {
+         0.0f, 0.0f, 0.0f, 1.0f,
+         0.0f, 0.0f, 0.0f, 1.0f,
+         0.0f, 0.0f, 0.0f, 1.0f,
+         0.0f, 0.0f, 0.0f, 1.0f,
+      };
+      int frame_width                   = (int)((float)thumbnail_margin / 3.0f);
+      float frame_color[16];
+      float separator_color[16];
+      int thumbnail_box_width;
+      int thumbnail_box_height;
+      int right_thumbnail_x;
+      int left_thumbnail_x;
+      int thumbnail_y;
+
+      /* Sanity check: Return immediately if this is
+       * a menu without thumbnails and we are not currently
+       * 'fading out' the fullscreen thumbnail view */
+      if (!ozone->fullscreen_thumbnails_available &&
+          ozone->show_fullscreen_thumbnails)
+         goto error;
+
+      /* Safety check: ensure that current
+       * selection matches the entry selected when
+       * fullscreen thumbnails were enabled
+       * > Note that we exclude this check if we are
+       *   currently viewing the quick menu and the
+       *   thumbnail view is fading out. This enables
+       *   a smooth transition if the user presses
+       *   RetroPad A or keyboard 'return' to enter the
+       *   quick menu while fullscreen thumbnails are
+       *   being displayed */
+      if (((size_t)ozone->selection != ozone->fullscreen_thumbnail_selection) &&
+          (!ozone->is_quick_menu || ozone->show_fullscreen_thumbnails))
+         goto error;
+
+      /* Sanity check: Return immediately if the view
+       * width/height is < 1 */
+      if ((view_width < 1) || (view_height < 1))
+         goto error;
+
+      /* Get number of 'active' thumbnails */
+      show_right_thumbnail = (right_thumbnail->status == GFX_THUMBNAIL_STATUS_AVAILABLE);
+      show_left_thumbnail  = (left_thumbnail->status  == GFX_THUMBNAIL_STATUS_AVAILABLE);
+
+      if (show_right_thumbnail)
+         num_thumbnails++;
+
+      if (show_left_thumbnail)
+         num_thumbnails++;
+
+      /* Do nothing if both thumbnails are missing
+       * > Note: Baring inexplicable internal errors, this
+       *   can never happen... */
+      if (num_thumbnails < 1)
+         goto error;
+
+      /* Get base thumbnail dimensions + draw positions */
+
+      /* > Thumbnail bounding box height + y position
+       *   are fixed */
+      thumbnail_box_height = view_height - (thumbnail_margin * 2);
+      thumbnail_y          = ozone->dimensions.header_height + thumbnail_margin + ozone->dimensions.spacer_1px;
+
+      /* Thumbnail bounding box width and x position
+       * depend upon number of active thumbnails */
+      if (num_thumbnails == 2)
+      {
+         thumbnail_box_width = (view_width - (thumbnail_margin * 3) - frame_width) >> 1;
+         left_thumbnail_x    = thumbnail_margin;
+         right_thumbnail_x   = left_thumbnail_x + thumbnail_box_width + frame_width + thumbnail_margin;
+      }
+      else
+      {
+         thumbnail_box_width = view_width - (thumbnail_margin * 2);
+         left_thumbnail_x    = thumbnail_margin;
+         right_thumbnail_x   = left_thumbnail_x;
+      }
+
+      /* Sanity check */
+      if ((thumbnail_box_width < 1) ||
+          (thumbnail_box_height < 1))
+         goto error;
+
+      /* Get thumbnail draw dimensions
+       * > Note: The following code is a bit awkward, since
+       *   we have to do things in a very specific order
+       *   - i.e. we cannot determine proper thumbnail
+       *     layout until we have thumbnail draw dimensions.
+       *     and we cannot get draw dimensions until we have
+       *     the bounding box dimensions...  */
+      if (show_right_thumbnail)
+      {
+         gfx_thumbnail_get_draw_dimensions(
+               right_thumbnail,
+               thumbnail_box_width, thumbnail_box_height, 1.0f,
+               &right_thumbnail_draw_width, &right_thumbnail_draw_height);
+
+         /* Sanity check */
+         if ((right_thumbnail_draw_width <= 0.0f) ||
+             (right_thumbnail_draw_height <= 0.0f))
+            goto error;
+      }
+
+      if (show_left_thumbnail)
+      {
+         gfx_thumbnail_get_draw_dimensions(
+               left_thumbnail,
+               thumbnail_box_width, thumbnail_box_height, 1.0f,
+               &left_thumbnail_draw_width, &left_thumbnail_draw_height);
+
+         /* Sanity check */
+         if ((left_thumbnail_draw_width <= 0.0f) ||
+             (left_thumbnail_draw_height <= 0.0f))
+            goto error;
+      }
+
+      /* Adjust thumbnail draw positions to achieve
+       * uniform appearance (accounting for actual
+       * draw dimensions...) */
+      if (num_thumbnails == 2)
+      {
+         int left_padding  = (thumbnail_box_width - (int)left_thumbnail_draw_width)  >> 1;
+         int right_padding = (thumbnail_box_width - (int)right_thumbnail_draw_width) >> 1;
+
+         /* Move thumbnails as close together as possible,
+          * and horizontally centre the resultant 'block'
+          * of images */
+         left_thumbnail_x  += right_padding;
+         right_thumbnail_x -= left_padding;
+      }
+
+      /* Set colour values */
+
+      /* > Background */
+      gfx_display_set_alpha(
+            background_color,
+            background_alpha * ozone->animations.fullscreen_thumbnail_alpha);
+
+      /* > Separators */
+      memcpy(separator_color, ozone->theme->header_footer_separator, sizeof(separator_color));
+      gfx_display_set_alpha(
+            separator_color, ozone->animations.fullscreen_thumbnail_alpha);
+
+      /* > Thumbnail frame */
+      memcpy(frame_color, ozone->theme->sidebar_background, sizeof(frame_color));
+      gfx_display_set_alpha(
+            frame_color, ozone->animations.fullscreen_thumbnail_alpha);
+
+      /* Darken background */
+      gfx_display_draw_quad(
+            video_info,
+            0,
+            ozone->dimensions.header_height + ozone->dimensions.spacer_1px,
+            width,
+            (unsigned)view_height,
+            width,
+            height,
+            background_color);
+
+      /* Draw full-width separators */
+      gfx_display_draw_quad(
+            video_info,
+            0,
+            ozone->dimensions.header_height,
+            width,
+            ozone->dimensions.spacer_1px,
+            width,
+            height,
+            separator_color);
+
+      gfx_display_draw_quad(
+            video_info,
+            0,
+            height - ozone->dimensions.footer_height,
+            width,
+            ozone->dimensions.spacer_1px,
+            width,
+            height,
+            separator_color);
+
+      /* Draw thumbnails */
+
+      /* > Right */
+      if (show_right_thumbnail)
+      {
+         /* Background */
+         gfx_display_draw_quad(
+               video_info,
+               right_thumbnail_x - frame_width +
+                     ((thumbnail_box_width - (int)right_thumbnail_draw_width) >> 1),
+               thumbnail_y - frame_width +
+                     ((thumbnail_box_height - (int)right_thumbnail_draw_height) >> 1),
+               (unsigned)right_thumbnail_draw_width + (frame_width << 1),
+               (unsigned)right_thumbnail_draw_height + (frame_width << 1),
+               width,
+               height,
+               frame_color);
+
+         /* Thumbnail */
+         gfx_thumbnail_draw(
+               video_info,
+               right_thumbnail,
+               right_thumbnail_x,
+               thumbnail_y,
+               (unsigned)thumbnail_box_width,
+               (unsigned)thumbnail_box_height,
+               GFX_THUMBNAIL_ALIGN_CENTRE,
+               ozone->animations.fullscreen_thumbnail_alpha,
+               1.0f,
+               NULL);
+      }
+
+      /* > Left */
+      if (show_left_thumbnail)
+      {
+         /* Background */
+         gfx_display_draw_quad(
+               video_info,
+               left_thumbnail_x - frame_width +
+                     ((thumbnail_box_width - (int)left_thumbnail_draw_width) >> 1),
+               thumbnail_y - frame_width +
+                     ((thumbnail_box_height - (int)left_thumbnail_draw_height) >> 1),
+               (unsigned)left_thumbnail_draw_width + (frame_width << 1),
+               (unsigned)left_thumbnail_draw_height + (frame_width << 1),
+               width,
+               height,
+               frame_color);
+
+         /* Thumbnail */
+         gfx_thumbnail_draw(
+               video_info,
+               left_thumbnail,
+               left_thumbnail_x,
+               thumbnail_y,
+               (unsigned)thumbnail_box_width,
+               (unsigned)thumbnail_box_height,
+               GFX_THUMBNAIL_ALIGN_CENTRE,
+               ozone->animations.fullscreen_thumbnail_alpha,
+               1.0f,
+               NULL);
+      }
+   }
+
+   return;
+
+error:
+   /* If fullscreen thumbnails are enabled at
+    * this point, must disable them immediately... */
+   if (ozone->show_fullscreen_thumbnails)
+      ozone_hide_fullscreen_thumbnails(ozone, false);
 }

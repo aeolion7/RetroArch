@@ -81,7 +81,7 @@ typedef struct
 } switch_video_t;
 
 static void *switch_init(const video_info_t *video,
-      const input_driver_t **input, void **input_data)
+      input_driver_t **input, void **input_data)
 {
    unsigned x, y;
    switch_video_t *sw = (switch_video_t*)calloc(1, sizeof(*sw));
@@ -120,7 +120,7 @@ static void *switch_init(const video_info_t *video,
    sw->vp.height      = 720;
    sw->vp.full_width  = 1280;
    sw->vp.full_height = 720;
-   video_driver_set_size(&sw->vp.width, &sw->vp.height);
+   video_driver_set_size(sw->vp.width, sw->vp.height);
 
    sw->vsync = video->vsync;
    sw->rgb32 = video->rgb32;
@@ -229,8 +229,8 @@ static bool switch_frame(void *data, const void *frame,
          &video_info->osd_stat_params;
 
       if (osd_params)
-         font_driver_render_msg(video_info, NULL, video_info->stat_text,
-               (const struct font_params*)&video_info->osd_stat_params);
+         font_driver_render_msg(sw, video_info, video_info->stat_text,
+               (const struct font_params*)&video_info->osd_stat_params, NULL);
    }
 #endif
 
@@ -263,10 +263,10 @@ static bool switch_frame(void *data, const void *frame,
    return true;
 }
 
-static void switch_set_nonblock_state(void *data, bool toggle)
+static void switch_set_nonblock_state(void *data, bool toggle, bool c, unsigned d)
 {
    switch_video_t *sw = data;
-   sw->vsync = !toggle;
+   sw->vsync          = !toggle;
 }
 
 static bool switch_alive(void *data)

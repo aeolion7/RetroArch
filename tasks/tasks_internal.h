@@ -28,12 +28,37 @@
 #include "../config.h"
 #endif
 
-#if defined(HAVE_NETWORKING) && defined(HAVE_MENU)
+#if defined(HAVE_NETWORKING)
+#include "../core_updater_list.h"
+#endif
+
+#if defined(HAVE_NETWORKING)
 /* Required for task_push_pl_entry_thumbnail_download() */
 #include "../playlist.h"
 #endif
 
 RETRO_BEGIN_DECLS
+
+typedef struct nbio_buf
+{
+   void *buf;
+   unsigned bufsize;
+   char *path;
+} nbio_buf_t;
+
+typedef struct autoconfig_params     autoconfig_params_t;
+
+struct autoconfig_params
+{
+   int32_t vid;
+   int32_t pid;
+   unsigned idx;
+   uint32_t max_users;
+   char  *name;
+   char  *autoconfig_directory;
+   bool show_hidden_files;
+};
+
 
 #ifdef HAVE_NETWORKING
 typedef struct
@@ -45,8 +70,14 @@ typedef struct
 void *task_push_http_transfer(const char *url, bool mute, const char *type,
       retro_task_callback_t cb, void *userdata);
 
+void *task_push_http_transfer_with_user_agent(const char *url, bool mute, const char *type,
+      const char* user_agent, retro_task_callback_t cb, void *userdata);
+
 void *task_push_http_post_transfer(const char *url, const char *post_data, bool mute, const char *type,
       retro_task_callback_t cb, void *userdata);
+
+void *task_push_http_post_transfer_with_user_agent(const char* url, const char* post_data, bool mute,
+   const char* type, const char* user_agent, retro_task_callback_t cb, void* user_data);
 
 task_retriever_info_t *http_task_get_transfer_list(void);
 
@@ -61,19 +92,31 @@ bool task_push_netplay_lan_scan_rooms(retro_task_callback_t cb);
 
 bool task_push_netplay_nat_traversal(void *nat_traversal_state, uint16_t port);
 
-#ifdef HAVE_MENU
-bool task_push_pl_thumbnail_download(const char *system, const char *playlist_path);
+/* Core updater tasks */
+void *task_push_get_core_updater_list(
+      core_updater_list_t* core_list, bool mute, bool refresh_menu);
+void *task_push_core_updater_download(
+      core_updater_list_t* core_list, const char *filename,
+      bool mute, bool check_crc, const char *path_dir_libretro);
+void task_push_update_installed_cores(const char *path_dir_libretro);
+
 bool task_push_pl_entry_thumbnail_download(
       const char *system,
       playlist_t *playlist,
       unsigned idx,
       bool overwrite,
       bool mute);
+
+#ifdef HAVE_MENU
+bool task_push_pl_thumbnail_download(
+      const char *system, const char *playlist_path,
+      const char *dir_thumbnails);
 #endif
 
 #endif
 
 bool task_push_pl_manager_reset_cores(const char *playlist_path);
+bool task_push_pl_manager_clean_playlist(const char *playlist_path);
 
 bool task_push_image_load(const char *fullpath,
       bool supports_rgba, unsigned upscale_threshold,
@@ -88,6 +131,8 @@ bool task_push_dbscan(
       retro_task_callback_t cb);
 #endif
 
+bool task_push_manual_content_scan(void);
+
 #ifdef HAVE_OVERLAY
 bool task_push_overlay_load_default(
       retro_task_callback_t cb,
@@ -99,9 +144,19 @@ bool task_push_overlay_load_default(
       void *user_data);
 #endif
 
+bool patch_content(
+      bool is_ips_pref,
+      bool is_bps_pref,
+      bool is_ups_pref,
+      const char *name_ips,
+      const char *name_bps,
+      const char *name_ups,
+      uint8_t **buf,
+      void *data);
+
 bool task_check_decompress(const char *source_file);
 
-bool task_push_decompress(
+void *task_push_decompress(
       const char *source_file,
       const char *target_dir,
       const char *target_file,
@@ -109,7 +164,8 @@ bool task_push_decompress(
       const char *valid_ext,
       retro_task_callback_t cb,
       void *user_data,
-      void *frontend_userdata);
+      void *frontend_userdata,
+      bool mute);
 
 void task_file_load_handler(retro_task_t *task);
 
@@ -118,9 +174,9 @@ bool take_screenshot(
       const char *path, bool silence,
       bool has_valid_framebuffer, bool fullpath, bool use_thread);
 
-bool event_load_save_files(void);
+bool event_load_save_files(bool is_sram_load_disabled);
 
-bool event_save_files(void);
+bool event_save_files(bool sram_used);
 
 void path_init_savefile_rtc(const char *savefile_path);
 
@@ -134,7 +190,9 @@ unsigned input_autoconfigure_get_device_name_index(unsigned i);
 
 void input_autoconfigure_reset(void);
 
-bool input_autoconfigure_connect(
+void input_autoconfigure_override_handler(void *data);
+
+void input_autoconfigure_connect(
       const char *name,
       const char *display_name,
       const char *driver,

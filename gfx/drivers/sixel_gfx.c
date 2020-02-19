@@ -187,11 +187,12 @@ static void scroll_on_demand(int pixelheight)
 }
 
 static void *sixel_gfx_init(const video_info_t *video,
-      const input_driver_t **input, void **input_data)
+      input_driver_t **input, void **input_data)
 {
    gfx_ctx_input_t inp;
    void *ctx_data                       = NULL;
    settings_t *settings                 = config_get_ptr();
+   bool video_font_enable               = settings->bools.video_font_enable;
    sixel_t *sixel                       = (sixel_t*)calloc(1, sizeof(*sixel));
    const gfx_ctx_driver_t *ctx_driver   = NULL;
    const char *scale_str                = NULL;
@@ -238,8 +239,10 @@ static void *sixel_gfx_init(const video_info_t *video,
 
    video_context_driver_input_driver(&inp);
 
-   if (settings->bools.video_font_enable)
-      font_driver_init_osd(sixel, false,
+   if (video_font_enable)
+      font_driver_init_osd(sixel,
+            video,
+            false,
             video->is_threaded,
             FONT_DRIVER_RENDER_SIXEL);
 
@@ -422,16 +425,12 @@ static bool sixel_gfx_frame(void *data, const void *frame,
    }
 
    if (msg)
-      font_driver_render_msg(video_info, NULL, msg, NULL);
+      font_driver_render_msg(sixel, video_info, msg, NULL, NULL);
 
    return true;
 }
 
-static void sixel_gfx_set_nonblock_state(void *data, bool toggle)
-{
-   (void)data;
-   (void)toggle;
-}
+static void sixel_gfx_set_nonblock_state(void *a, bool b, bool c, unsigned d) { }
 
 static bool sixel_gfx_alive(void *data)
 {
@@ -450,7 +449,7 @@ static bool sixel_gfx_alive(void *data)
             &quit, &resize, &temp_width, &temp_height, is_shutdown);
 
    if (temp_width != 0 && temp_height != 0)
-      video_driver_set_size(&temp_width, &temp_height);
+      video_driver_set_size(temp_width, temp_height);
 
    return true;
 }
@@ -544,14 +543,6 @@ static void sixel_set_texture_frame(void *data,
    }
 }
 
-static void sixel_set_osd_msg(void *data,
-      video_frame_info_t *video_info,
-      const char *msg,
-      const void *params, void *font)
-{
-   font_driver_render_msg(video_info, font, msg, params);
-}
-
 static void sixel_get_video_output_size(void *data,
       unsigned *width, unsigned *height)
 {
@@ -600,7 +591,7 @@ static const video_poke_interface_t sixel_poke_interface = {
 #if defined(HAVE_MENU)
    sixel_set_texture_frame,
    NULL,
-   sixel_set_osd_msg,
+   font_driver_render_msg,
    NULL,
 #else
    NULL,

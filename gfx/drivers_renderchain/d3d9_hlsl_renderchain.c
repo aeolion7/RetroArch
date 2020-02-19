@@ -34,7 +34,6 @@
 
 #include "../video_shader_parse.h"
 #include "../../managers/state_manager.h"
-#include "../../configuration.h"
 #include "../../retroarch.h"
 #include "../../verbosity.h"
 
@@ -591,7 +590,7 @@ static bool hlsl_d3d9_renderchain_render(
 
       d3d9_texture_get_surface_level(to_pass->tex, 0, (void**)&target);
 
-      d3d9_device_set_render_target(chain->chain.dev, 0, (void*)target);
+      d3d9_device_set_render_target(chain->chain.dev, 0, target);
 
       d3d9_convert_geometry(&from_pass->info,
             &out_width, &out_height,
@@ -629,7 +628,7 @@ static bool hlsl_d3d9_renderchain_render(
    }
 
    /* Final pass */
-   d3d9_device_set_render_target(chain->chain.dev, 0, (void*)back_buffer);
+   d3d9_device_set_render_target(chain->chain.dev, 0, back_buffer);
 
    last_pass = (struct shader_pass*)&chain->chain.passes->
       data[chain->chain.passes->count - 1];

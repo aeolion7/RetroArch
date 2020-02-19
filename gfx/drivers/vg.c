@@ -77,10 +77,18 @@ typedef struct
 
 static PFNVGCREATEEGLIMAGETARGETKHRPROC pvgCreateEGLImageTargetKHR;
 
-static void vg_set_nonblock_state(void *data, bool state)
+static void vg_set_nonblock_state(void *data, bool state,
+      bool adaptive_vsync_enabled, unsigned swap_interval)
 {
+   vg_t *vg     = (vg_t*)data;
    int interval = state ? 0 : 1;
-   video_context_driver_swap_interval(&interval);
+
+   if (vg->ctx_driver && vg->ctx_driver->swap_interval)
+   {
+      if (adaptive_vsync_enabled && interval == 1)
+         interval = -1;
+      vg->ctx_driver->swap_interval(vg->ctx_data, interval);
+   }
 }
 
 static INLINE bool vg_query_extension(const char *ext)
@@ -94,7 +102,7 @@ static INLINE bool vg_query_extension(const char *ext)
 }
 
 static void *vg_init(const video_info_t *video,
-      const input_driver_t **input, void **input_data)
+      input_driver_t **input, void **input_data)
 {
    gfx_ctx_mode_t mode;
    gfx_ctx_input_t inp;
@@ -106,6 +114,11 @@ static void *vg_init(const video_info_t *video,
    unsigned temp_height            = 0;
    void *ctx_data                  = NULL;
    settings_t        *settings     = config_get_ptr();
+   const char *path_font           = settings->paths.path_font;
+   float video_font_size           = settings->floats.video_font_size;
+   float video_msg_color_r         = settings->floats.video_msg_color_r;
+   float video_msg_color_g         = settings->floats.video_msg_color_g;
+   float video_msg_color_b         = settings->floats.video_msg_color_b;
    vg_t                    *vg     = (vg_t*)calloc(1, sizeof(vg_t));
    const gfx_ctx_driver_t *ctx     = video_context_driver_init_first(
          vg, settings->arrays.video_context_driver,
@@ -130,11 +143,18 @@ static void *vg_init(const video_info_t *video,
    RARCH_LOG("[VG]: Detecting screen resolution %ux%u.\n", temp_width, temp_height);
 
    if (temp_width != 0 && temp_height != 0)
-      video_driver_set_size(&temp_width, &temp_height);
+      video_driver_set_size(temp_width, temp_height);
 
    interval = video->vsync ? 1 : 0;
 
-   video_context_driver_swap_interval(&interval);
+   if (ctx->swap_interval)
+   {
+      bool adaptive_vsync_enabled            = video_driver_test_all_flags(
+            GFX_CTX_FLAGS_ADAPTIVE_VSYNC) && video->adaptive_vsync;
+      if (adaptive_vsync_enabled && interval == 1)
+         interval = -1;
+      ctx->swap_interval(vg->ctx_data, interval);
+   }
 
    vg->mTexType    = video->rgb32 ? VG_sXRGB_8888 : VG_sRGB_565;
    vg->keep_aspect = video->force_aspect;
@@ -159,24 +179,25 @@ static void *vg_init(const video_info_t *video,
 
    video_driver_get_size(&temp_width, &temp_height);
 
-   temp_width  = 0;
-   temp_height = 0;
-   mode.width  = 0;
-   mode.height = 0;
+   temp_width        = 0;
+   temp_height       = 0;
+   mode.width        = 0;
+   mode.height       = 0;
 
    video_context_driver_get_video_size(&mode);
 
-   temp_width  = mode.width;
-   temp_height = mode.height;
-   mode.width  = 0;
-   mode.height = 0;
+   temp_width        = mode.width;
+   temp_height       = mode.height;
+   mode.width        = 0;
+   mode.height       = 0;
 
    vg->should_resize = true;
 
    if (temp_width != 0 && temp_height != 0)
    {
-      RARCH_LOG("[VG]: Verified window resolution %ux%u.\n", temp_width, temp_height);
-      video_driver_set_size(&temp_width, &temp_height);
+      RARCH_LOG("[VG]: Verified window resolution %ux%u.\n",
+            temp_width, temp_height);
+      video_driver_set_size(temp_width, temp_height);
    }
 
    video_driver_get_size(&temp_width, &temp_height);
@@ -192,8 +213,13 @@ static void *vg_init(const video_info_t *video,
    vgSetfv(VG_CLEAR_COLOR, 4, clearColor);
 
    vg->mTextureWidth = vg->mTextureHeight = video->input_scale * RARCH_SCALE_BASE;
-   vg->mImage = vgCreateImage(vg->mTexType, vg->mTextureWidth, vg->mTextureHeight,
-         video->smooth ? VG_IMAGE_QUALITY_BETTER : VG_IMAGE_QUALITY_NONANTIALIASED);
+   vg->mImage        = vgCreateImage(
+         vg->mTexType,
+         vg->mTextureWidth,
+         vg->mTextureHeight,
+         video->smooth 
+         ? VG_IMAGE_QUALITY_BETTER 
+         : VG_IMAGE_QUALITY_NONANTIALIASED);
    vg_set_nonblock_state(vg, !video->vsync);
 
    inp.input      = input;
@@ -204,7 +230,8 @@ static void *vg_init(const video_info_t *video,
    if (     video->font_enable
          && font_renderer_create_default(
             &vg->font_driver, &vg->mFontRenderer,
-            *settings->paths.path_font ? settings->paths.path_font : NULL, settings->floats.video_font_size))
+            *path_font ? path_font : NULL,
+            video_font_size))
    {
       vg->mFont            = vgCreateFont(0);
 
@@ -214,19 +241,19 @@ static void *vg_init(const video_info_t *video,
          VGfloat paintBg[4];
 
          vg->mFontsOn      = true;
-         vg->mFontHeight   = settings->floats.video_font_size;
+         vg->mFontHeight   = video_font_size;
          vg->mPaintFg      = vgCreatePaint();
          vg->mPaintBg      = vgCreatePaint();
 
-         paintFg[0] = settings->floats.video_msg_color_r;
-         paintFg[1] = settings->floats.video_msg_color_g;
-         paintFg[2] = settings->floats.video_msg_color_b;
-         paintFg[3] = 1.0f;
+         paintFg[0]        = video_msg_color_r;
+         paintFg[1]        = video_msg_color_g;
+         paintFg[2]        = video_msg_color_b;
+         paintFg[3]        = 1.0f;
 
-         paintBg[0] = settings->floats.video_msg_color_r / 2.0f;
-         paintBg[1] = settings->floats.video_msg_color_g / 2.0f;
-         paintBg[2] = settings->floats.video_msg_color_b / 2.0f;
-         paintBg[3] = 0.5f;
+         paintBg[0]        = video_msg_color_r / 2.0f;
+         paintBg[1]        = video_msg_color_g / 2.0f;
+         paintBg[2]        = video_msg_color_b / 2.0f;
+         paintBg[3]        = 0.5f;
 
          vgSetParameteri(vg->mPaintFg, VG_PAINT_TYPE, VG_PAINT_TYPE_COLOR);
          vgSetParameterfv(vg->mPaintFg, VG_PAINT_COLOR, 4, paintFg);
@@ -237,17 +264,11 @@ static void *vg_init(const video_info_t *video,
    }
 
    if (vg_query_extension("KHR_EGL_image")
-         && video_context_driver_init_image_buffer((void*)video))
+         && vg->ctx_driver->image_buffer_init
+         && vg->ctx_driver->image_buffer_init(vg->ctx_data, (void*)video))
    {
-      gfx_ctx_proc_address_t proc_address;
-
-      proc_address.addr = NULL;
-      proc_address.sym  = "vgCreateEGLImageTargetKHR";
-
-      video_context_driver_get_proc_address(&proc_address);
-
-      pvgCreateEGLImageTargetKHR =
-         (PFNVGCREATEEGLIMAGETARGETKHRPROC)proc_address.addr;
+      if (vg->ctx_driver->get_proc_address)
+         pvgCreateEGLImageTargetKHR = (PFNVGCREATEEGLIMAGETARGETKHRPROC)vg->ctx_driver->get_proc_address("vgCreateEGLImageTargetKHR");
 
       if (pvgCreateEGLImageTargetKHR)
       {
@@ -452,15 +473,18 @@ static bool vg_alive(void *data)
             &quit, &resize, &temp_width, &temp_height, is_shutdown);
 
    if (temp_width != 0 && temp_height != 0)
-      video_driver_set_size(&temp_width, &temp_height);
+      video_driver_set_size(temp_width, temp_height);
 
    return !quit;
 }
 
 static bool vg_suppress_screensaver(void *data, bool enable)
 {
-   bool enabled = enable;
-   return video_context_driver_suppress_screensaver(&enabled);
+   bool enabled         = enable;
+   vg_t            *vg  = (vg_t*)data;
+   if (vg->ctx_data && vg->ctx_driver->suppress_screensaver)
+      return vg->ctx_driver->suppress_screensaver(vg->ctx_data, enabled);
+   return false;
 }
 
 static bool vg_set_shader(void *data,

@@ -24,7 +24,6 @@
 #include <algorithm>
 
 #include "glslang_util.h"
-#include "slang_preprocess.h"
 #include "slang_reflection.h"
 #include "slang_reflection.hpp"
 #include "slang_process.h"
@@ -212,13 +211,13 @@ static bool slang_process_reflection(
       slang_semantic_meta& src = sl_reflection.semantics[semantic];
       if (src.push_constant || src.uniform)
       {
-         uniform_sem_t uniform = { map->uniforms[semantic],
+         uniform_sem_t uniform  = { map->uniforms[semantic],
                                    src.num_components
                                       * (unsigned)sizeof(float) };
-         string uniform_id     = get_semantic_name(
-               sl_reflection, (slang_semantic)semantic, 0);
+         const char *uniform_id = get_semantic_name(
+               sl_reflection, (slang_semantic)semantic, 0).c_str();
 
-         strlcpy(uniform.id, uniform_id.c_str(), sizeof(uniform.id));
+         strlcpy(uniform.id, uniform_id, sizeof(uniform.id));
 
          if (src.push_constant)
          {
@@ -242,9 +241,9 @@ static bool slang_process_reflection(
          uniform_sem_t uniform = {
             &shader_info->parameters[i].current, sizeof(float) };
 
-         string uniform_id = get_semantic_name(
-               sl_reflection, SLANG_SEMANTIC_FLOAT_PARAMETER, i);
-         strlcpy(uniform.id, uniform_id.c_str(), sizeof(uniform.id));
+         const char *uniform_id = get_semantic_name(
+               sl_reflection, SLANG_SEMANTIC_FLOAT_PARAMETER, i).c_str();
+         strlcpy(uniform.id, uniform_id, sizeof(uniform.id));
 
          if (src.push_constant)
          {
@@ -310,12 +309,12 @@ static bool slang_process_reflection(
                4 * sizeof(float)
             };
 
-            string uniform_id =
+            const char *uniform_id =
                   get_size_semantic_name(
                         sl_reflection,
-                        (slang_texture_semantic)semantic, index);
+                        (slang_texture_semantic)semantic, index).c_str();
 
-            strlcpy(uniform.id, uniform_id.c_str(), sizeof(uniform.id));
+            strlcpy(uniform.id, uniform_id, sizeof(uniform.id));
 
             if (src.push_constant)
             {
@@ -357,6 +356,96 @@ static bool slang_process_reflection(
    }
 
    return true;
+}
+
+bool slang_preprocess_parse_parameters(glslang_meta& meta,
+      struct video_shader *shader)
+{
+   unsigned i;
+   unsigned old_num_parameters = shader->num_parameters;
+
+   /* Assumes num_parameters is
+    * initialized to something sane. */
+   for (i = 0; i < meta.parameters.size(); i++)
+   {
+      bool mismatch_dup = false;
+      bool dup          = false;
+      auto itr          = find_if(shader->parameters,
+            shader->parameters + shader->num_parameters,
+            [&](const video_shader_parameter &parsed_param)
+            {
+            return meta.parameters[i].id == parsed_param.id;
+            });
+
+      if (itr != shader->parameters + shader->num_parameters)
+      {
+         dup = true;
+         /* Allow duplicate #pragma parameter, but only
+          * if they are exactly the same. */
+         if (  meta.parameters[i].desc    != itr->desc    ||
+               meta.parameters[i].initial != itr->initial ||
+               meta.parameters[i].minimum != itr->minimum ||
+               meta.parameters[i].maximum != itr->maximum ||
+               meta.parameters[i].step    != itr->step)
+         {
+            RARCH_ERR("[slang]: Duplicate parameters"
+                  " found for \"%s\", but arguments do not match.\n",
+                  itr->id);
+            mismatch_dup = true;
+         }
+      }
+
+      if (dup && !mismatch_dup)
+         continue;
+
+      if (mismatch_dup || shader->num_parameters == GFX_MAX_PARAMETERS)
+      {
+         shader->num_parameters = old_num_parameters;
+         return false;
+      }
+
+      struct video_shader_parameter *p = (struct video_shader_parameter*)
+         &shader->parameters[shader->num_parameters++];
+
+      if (!p)
+         continue;
+
+      strlcpy(p->id,   meta.parameters[i].id.c_str(),   sizeof(p->id));
+      strlcpy(p->desc, meta.parameters[i].desc.c_str(), sizeof(p->desc));
+      p->initial = meta.parameters[i].initial;
+      p->minimum = meta.parameters[i].minimum;
+      p->maximum = meta.parameters[i].maximum;
+      p->step    = meta.parameters[i].step;
+      p->current = meta.parameters[i].initial;
+   }
+
+   return true;
+}
+
+bool slang_preprocess_parse_parameters(const char *shader_path,
+      struct video_shader *shader)
+{
+   glslang_meta meta;
+   bool ret                  = false;
+   struct string_list *lines = string_list_new();
+
+   if (!lines)
+      goto end;
+
+   if (!glslang_read_shader_file(shader_path, lines, true))
+      goto end;
+   meta = glslang_meta{};
+   if (!glslang_parse_meta(lines, &meta))
+      goto end;
+
+   ret = slang_preprocess_parse_parameters(meta, shader);
+
+end:
+
+   if (lines)
+      string_list_free(lines);
+
+   return ret;
 }
 
 bool slang_process(
@@ -441,87 +530,93 @@ bool slang_process(
          ps_compiler->set_decoration(
                ps_resources.push_constant_buffers[0].id, spv::DecorationBinding, 1);
 
+      switch (dst_type)
+      {
+         case RARCH_SHADER_HLSL:
+         case RARCH_SHADER_CG:
 #ifdef ENABLE_HLSL
-      if (dst_type == RARCH_SHADER_HLSL || dst_type == RARCH_SHADER_CG)
-      {
-         CompilerHLSL::Options options;
-         CompilerHLSL*         vs = (CompilerHLSL*)vs_compiler;
-         CompilerHLSL*         ps = (CompilerHLSL*)ps_compiler;
-         options.shader_model     = version;
-         vs->set_hlsl_options(options);
-         ps->set_hlsl_options(options);
-         vs_code = vs->compile();
-         ps_code = ps->compile();
-      }
-      else
+            {
+               CompilerHLSL::Options options;
+               CompilerHLSL*         vs = (CompilerHLSL*)vs_compiler;
+               CompilerHLSL*         ps = (CompilerHLSL*)ps_compiler;
+               options.shader_model     = version;
+               vs->set_hlsl_options(options);
+               ps->set_hlsl_options(options);
+               vs_code = vs->compile();
+               ps_code = ps->compile();
+            }
 #endif
-      if (dst_type == RARCH_SHADER_METAL)
-      {
-         CompilerMSL::Options options;
-         CompilerMSL*         vs = (CompilerMSL*)vs_compiler;
-         CompilerMSL*         ps = (CompilerMSL*)ps_compiler;
-         options.msl_version     = version;
-         vs->set_msl_options(options);
-         ps->set_msl_options(options);
-
-         const auto remap_push_constant = [](CompilerMSL *comp,
-                                             const ShaderResources &resources) {
-            for (const Resource& resource : resources.push_constant_buffers)
+            break;
+         case RARCH_SHADER_METAL:
             {
-               // Explicit 1:1 mapping for bindings.
-               MSLResourceBinding binding = {};
-               binding.stage = comp->get_execution_model();
-               binding.desc_set = kPushConstDescSet;
-               binding.binding = kPushConstBinding;
-               // Use earlier decoration override.
-               binding.msl_buffer = comp->get_decoration(resource.id, spv::DecorationBinding);
-               comp->add_msl_resource_binding(binding);
-            }
-         };
+               CompilerMSL::Options options;
+               CompilerMSL*         vs = (CompilerMSL*)vs_compiler;
+               CompilerMSL*         ps = (CompilerMSL*)ps_compiler;
+               options.msl_version     = version;
+               vs->set_msl_options(options);
+               ps->set_msl_options(options);
 
-         const auto remap_generic_resource = [](CompilerMSL *comp,
-                                                const SmallVector<Resource> &resources) {
-            for (const Resource& resource : resources)
+               const auto remap_push_constant = [](CompilerMSL *comp,
+                     const ShaderResources &resources) {
+                  for (const Resource& resource : resources.push_constant_buffers)
+                  {
+                     // Explicit 1:1 mapping for bindings.
+                     MSLResourceBinding binding = {};
+                     binding.stage = comp->get_execution_model();
+                     binding.desc_set = kPushConstDescSet;
+                     binding.binding = kPushConstBinding;
+                     // Use earlier decoration override.
+                     binding.msl_buffer = comp->get_decoration(resource.id, spv::DecorationBinding);
+                     comp->add_msl_resource_binding(binding);
+                  }
+               };
+
+               const auto remap_generic_resource = [](CompilerMSL *comp,
+                     const SmallVector<Resource> &resources) {
+                  for (const Resource& resource : resources)
+                  {
+                     // Explicit 1:1 mapping for bindings.
+                     MSLResourceBinding binding = {};
+                     binding.stage = comp->get_execution_model();
+                     binding.desc_set = comp->get_decoration(resource.id, spv::DecorationDescriptorSet);
+
+                     // Use existing decoration override.
+                     uint32_t msl_binding = comp->get_decoration(resource.id, spv::DecorationBinding);
+                     binding.binding      = msl_binding;
+                     binding.msl_buffer   = msl_binding;
+                     binding.msl_texture  = msl_binding;
+                     binding.msl_sampler  = msl_binding;
+                     comp->add_msl_resource_binding(binding);
+                  }
+               };
+
+               remap_push_constant(vs, vs_resources);
+               remap_push_constant(ps, ps_resources);
+               remap_generic_resource(vs, vs_resources.uniform_buffers);
+               remap_generic_resource(ps, ps_resources.uniform_buffers);
+               remap_generic_resource(vs, vs_resources.sampled_images);
+               remap_generic_resource(ps, ps_resources.sampled_images);
+
+               vs_code = vs->compile();
+               ps_code = ps->compile();
+            }
+            break;
+         case RARCH_SHADER_GLSL:
             {
-               // Explicit 1:1 mapping for bindings.
-               MSLResourceBinding binding = {};
-               binding.stage = comp->get_execution_model();
-               binding.desc_set = comp->get_decoration(resource.id, spv::DecorationDescriptorSet);
+               CompilerGLSL::Options options;
+               CompilerGLSL*         vs = (CompilerGLSL*)vs_compiler;
+               CompilerGLSL*         ps = (CompilerGLSL*)ps_compiler;
+               options.version          = version;
+               ps->set_common_options(options);
+               vs->set_common_options(options);
 
-               // Use existing decoration override.
-               uint32_t msl_binding = comp->get_decoration(resource.id, spv::DecorationBinding);
-               binding.binding      = msl_binding;
-               binding.msl_buffer   = msl_binding;
-               binding.msl_texture  = msl_binding;
-               binding.msl_sampler  = msl_binding;
-               comp->add_msl_resource_binding(binding);
+               vs_code = vs->compile();
+               ps_code = ps->compile();
             }
-         };
-
-         remap_push_constant(vs, vs_resources);
-         remap_push_constant(ps, ps_resources);
-         remap_generic_resource(vs, vs_resources.uniform_buffers);
-         remap_generic_resource(ps, ps_resources.uniform_buffers);
-         remap_generic_resource(vs, vs_resources.sampled_images);
-         remap_generic_resource(ps, ps_resources.sampled_images);
-
-         vs_code = vs->compile();
-         ps_code = ps->compile();
+            break;
+         default:
+            goto error;
       }
-      else if (dst_type == RARCH_SHADER_GLSL)
-      {
-         CompilerGLSL::Options options;
-         CompilerGLSL*         vs = (CompilerGLSL*)vs_compiler;
-         CompilerGLSL*         ps = (CompilerGLSL*)ps_compiler;
-         options.version          = version;
-         ps->set_common_options(options);
-         vs->set_common_options(options);
-
-         vs_code = vs->compile();
-         ps_code = ps->compile();
-      }
-      else
-         goto error;
 
       pass.source.string.vertex   = strdup(vs_code.c_str());
       pass.source.string.fragment = strdup(ps_code.c_str());

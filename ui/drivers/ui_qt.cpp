@@ -26,9 +26,7 @@ extern "C" {
 #endif
 
 #include "../ui_companion_driver.h"
-#include "../../core.h"
 #include "../../configuration.h"
-#include "../../retroarch.h"
 #include "../../verbosity.h"
 #include "../../msg_hash.h"
 #include "../../tasks/tasks_internal.h"
@@ -118,9 +116,8 @@ void ThumbnailWidget::dropEvent(QDropEvent *event)
          emit(filesDropped(image, m_thumbnailType));
       else
       {
-         QByteArray stringArray = QDir::toNativeSeparators(imageString).toUtf8();
-         const char *stringData = stringArray.constData();
-         RARCH_ERR("[Qt]: Could not read image: %s\n", stringData);
+         const char *string_data = QDir::toNativeSeparators(imageString).toUtf8().constData();
+         RARCH_ERR("[Qt]: Could not read image: %s\n", string_data);
       }
    }
 }
@@ -253,8 +250,10 @@ static void* ui_companion_qt_init(void)
    QMenu                         *viewMenu = NULL;
    QMenu              *viewClosedDocksMenu = NULL;
 #ifdef Q_OS_WIN
+#ifdef HAVE_ONLINE_UPDATER
    QMenu                        *toolsMenu = NULL;
    QMenu                      *updaterMenu = NULL;
+#endif
 #endif
    QMenu                         *helpMenu = NULL;
    QDockWidget              *thumbnailDock = NULL;
@@ -352,7 +351,9 @@ static void* ui_companion_qt_init(void)
    QObject::connect(viewClosedDocksMenu, SIGNAL(aboutToShow()), mainwindow, SLOT(onViewClosedDocksAboutToShow()));
 
    viewMenu->addAction(msg_hash_to_str(MENU_ENUM_LABEL_VALUE_QT_CORE_OPTIONS), mainwindow, SLOT(onCoreOptionsClicked()));
+#if defined(HAVE_CG) || defined(HAVE_GLSL) || defined(HAVE_SLANG) || defined(HAVE_HLSL)
    viewMenu->addAction(msg_hash_to_str(MENU_ENUM_LABEL_VALUE_SHADER_OPTIONS), mainwindow, SLOT(onShaderParamsClicked()));
+#endif
 
    viewMenu->addSeparator();
    viewMenu->addAction(msg_hash_to_str(MENU_ENUM_LABEL_VALUE_QT_VIEW_TYPE_ICONS), mainwindow, SLOT(onIconViewClicked()));
@@ -361,9 +362,11 @@ static void* ui_companion_qt_init(void)
    viewMenu->addAction(msg_hash_to_str(MENU_ENUM_LABEL_VALUE_QT_MENU_VIEW_OPTIONS), mainwindow->viewOptionsDialog(), SLOT(showDialog()));
 
 #ifdef Q_OS_WIN
+#ifdef HAVE_ONLINE_UPDATER
    toolsMenu = menu->addMenu(msg_hash_to_str(MENU_ENUM_LABEL_VALUE_QT_MENU_TOOLS));
    updaterMenu = toolsMenu->addMenu(msg_hash_to_str(MENU_ENUM_LABEL_VALUE_ONLINE_UPDATER));
    updaterMenu->addAction(msg_hash_to_str(MENU_ENUM_LABEL_VALUE_QT_UPDATE_RETROARCH_NIGHTLY), mainwindow, SLOT(updateRetroArchNightly()));
+#endif
 #endif
    helpMenu = menu->addMenu(msg_hash_to_str(MENU_ENUM_LABEL_VALUE_QT_MENU_HELP));
    helpMenu->addAction(QString(msg_hash_to_str(MENU_ENUM_LABEL_VALUE_QT_MENU_HELP_DOCUMENTATION)), mainwindow, SLOT(showDocs()));
@@ -609,8 +612,8 @@ static void* ui_companion_qt_init(void)
    /* the initial playlist that is selected is based on the user's setting (initialPlaylist) */
    for (i = 0; listWidget->count() && i < listWidget->count(); i++)
    {
-      QListWidgetItem *item = listWidget->item(i);
       QString path;
+      QListWidgetItem *item = listWidget->item(i);
 
       if (!item)
          continue;
@@ -645,27 +648,19 @@ static void* ui_companion_qt_init(void)
    return handle;
 }
 
-static int ui_companion_qt_iterate(void *data, unsigned action)
-{
-   (void)data;
-   (void)action;
-   return 0;
-}
-
-static void ui_companion_qt_notify_content_loaded(void *data)
-{
-   (void)data;
-}
+static void ui_companion_qt_notify_content_loaded(void *data) { }
 
 static void ui_companion_qt_toggle(void *data, bool force)
 {
-   ui_companion_qt_t *handle = (ui_companion_qt_t*)data;
+   ui_companion_qt_t *handle  = (ui_companion_qt_t*)data;
    ui_window_qt_t *win_handle = (ui_window_qt_t*)handle->window;
-   settings_t *settings = config_get_ptr();
+   settings_t *settings       = config_get_ptr();
+   bool ui_companion_toggle   = settings->bools.ui_companion_toggle;
+   bool video_fullscreen      = settings->bools.video_fullscreen;
 
-   if (settings->bools.ui_companion_toggle || force)
+   if (ui_companion_toggle || force)
    {
-      if (settings->bools.video_fullscreen)
+      if (video_fullscreen)
          command_event(CMD_EVENT_FULLSCREEN_TOGGLE, NULL);
 
       win_handle->qtWindow->activateWindow();
@@ -680,7 +675,8 @@ static void ui_companion_qt_toggle(void *data, bool force)
       {
          already_started = true;
 
-         if (win_handle->qtWindow->settings()->value("show_welcome_screen", true).toBool())
+         if (win_handle->qtWindow->settings()->value(
+                  "show_welcome_screen", true).toBool())
             win_handle->qtWindow->showWelcomeScreen();
       }
    }
@@ -688,7 +684,7 @@ static void ui_companion_qt_toggle(void *data, bool force)
 
 static void ui_companion_qt_event_command(void *data, enum event_command cmd)
 {
-   ui_companion_qt_t *handle = (ui_companion_qt_t*)data;
+   ui_companion_qt_t *handle  = (ui_companion_qt_t*)data;
    ui_window_qt_t *win_handle = (ui_window_qt_t*)handle->window;
 
    if (!handle)
@@ -698,8 +694,10 @@ static void ui_companion_qt_event_command(void *data, enum event_command cmd)
    {
       case CMD_EVENT_SHADERS_APPLY_CHANGES:
       case CMD_EVENT_SHADER_PRESET_LOADED:
+#if defined(HAVE_CG) || defined(HAVE_GLSL) || defined(HAVE_SLANG) || defined(HAVE_HLSL)
          RARCH_LOG("[Qt]: Reloading shader parameters.\n");
          win_handle->qtWindow->deferReloadShaderParams();
+#endif
          break;
       default:
          break;
@@ -707,16 +705,11 @@ static void ui_companion_qt_event_command(void *data, enum event_command cmd)
 }
 
 static void ui_companion_qt_notify_list_pushed(void *data, file_list_t *list,
-   file_list_t *menu_list)
-{
-   (void)data;
-   (void)list;
-   (void)menu_list;
-}
+   file_list_t *menu_list) { }
 
 static void ui_companion_qt_notify_refresh(void *data)
 {
-   ui_companion_qt_t *handle = (ui_companion_qt_t*)data;
+   ui_companion_qt_t *handle  = (ui_companion_qt_t*)data;
    ui_window_qt_t *win_handle = (ui_window_qt_t*)handle->window;
 
    win_handle->qtWindow->deferReloadPlaylists();
@@ -724,21 +717,22 @@ static void ui_companion_qt_notify_refresh(void *data)
 
 static void ui_companion_qt_log_msg(void *data, const char *msg)
 {
-   ui_companion_qt_t *handle = (ui_companion_qt_t*)data;
+   ui_companion_qt_t *handle  = (ui_companion_qt_t*)data;
    ui_window_qt_t *win_handle = (ui_window_qt_t*)handle->window;
 
    win_handle->qtWindow->appendLogMessage(msg);
 }
 
-void ui_companion_qt_msg_queue_push(void *data, const char *msg, unsigned priority, unsigned duration, bool flush)
+void ui_companion_qt_msg_queue_push(void *data,
+      const char *msg, unsigned priority, unsigned duration, bool flush)
 {
-   ui_companion_qt_t *handle = (ui_companion_qt_t*)data;
+   ui_companion_qt_t *handle  = (ui_companion_qt_t*)data;
    ui_window_qt_t *win_handle = NULL;
 
    if (!handle)
       return;
 
-   win_handle = (ui_window_qt_t*)handle->window;
+   win_handle                 = (ui_window_qt_t*)handle->window;
 
    if (win_handle)
       win_handle->qtWindow->showStatusMessage(msg, priority, duration, flush);
@@ -747,7 +741,6 @@ void ui_companion_qt_msg_queue_push(void *data, const char *msg, unsigned priori
 ui_companion_driver_t ui_companion_qt = {
    ui_companion_qt_init,
    ui_companion_qt_deinit,
-   ui_companion_qt_iterate,
    ui_companion_qt_toggle,
    ui_companion_qt_event_command,
    ui_companion_qt_notify_content_loaded,

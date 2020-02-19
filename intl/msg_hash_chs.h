@@ -1,4 +1,4 @@
-﻿#if defined(_MSC_VER) && !defined(_XBOX) && (_MSC_VER >= 1500 && _MSC_VER < 1900)
+#if defined(_MSC_VER) && !defined(_XBOX) && (_MSC_VER >= 1500 && _MSC_VER < 1900)
 #if (_MSC_VER >= 1700)
 /* https://support.microsoft.com/en-us/kb/980263 */
 #pragma execution_character_set("utf-8")
@@ -43,10 +43,6 @@ MSG_HASH(
       "未知的编译器"
       )
 MSG_HASH(
-      MSG_NATIVE,
-      "Native"
-      )
-MSG_HASH(
       MSG_DEVICE_DISCONNECTED_FROM_PORT,
       "设备已从端口上断开"
       )
@@ -75,10 +71,6 @@ MSG_HASH(
       "未提供参数也没有内建菜单，显示帮助..."
       )
 MSG_HASH(
-      MSG_SETTING_DISK_IN_TRAY,
-      "Setting disk in tray"
-      )
-MSG_HASH(
       MSG_WAITING_FOR_CLIENT,
       "等待客户端 ..."
       )
@@ -89,14 +81,6 @@ MSG_HASH(
 MSG_HASH(
       MSG_NETPLAY_YOU_HAVE_JOINED_AS_PLAYER_N,
       "你已作为玩家 %d 加入"
-      )
-MSG_HASH(
-      MSG_NETPLAY_ENDIAN_DEPENDENT,
-      "This core does not support inter-architecture netplay between these systems"
-      )
-MSG_HASH(
-      MSG_NETPLAY_PLATFORM_DEPENDENT,
-      "This core does not support inter-architecture netplay"
       )
 MSG_HASH(
       MSG_NETPLAY_ENTER_PASSWORD,
@@ -137,14 +121,6 @@ MSG_HASH(
 MSG_HASH(
       MSG_NETPLAY_CHANGED_NICK,
       "你的昵称已修改为「%s」"
-      )
-MSG_HASH(
-      MENU_ENUM_SUBLABEL_VIDEO_SHARED_CONTEXT,
-      "Give hardware-rendered cores their own private context. Avoids having to assume hardware state changes inbetween frames."
-      )
-MSG_HASH(
-      MENU_ENUM_SUBLABEL_MENU_HORIZONTAL_ANIMATION,
-      "Enable horizontal animation for the menu. This will have a performance hit."
       )
 MSG_HASH(
       MENU_ENUM_SUBLABEL_MENU_SETTINGS,
@@ -403,10 +379,12 @@ MSG_HASH(
       MENU_ENUM_LABEL_VALUE_BLOCK_SRAM_OVERWRITE,
       "加载即时存档时不覆盖游戏自带存档"
       )
+#ifdef HAVE_LAKKA
 MSG_HASH(
       MENU_ENUM_LABEL_VALUE_BLUETOOTH_ENABLE,
       "启用蓝牙服务"
       )
+#endif
 MSG_HASH(
       MENU_ENUM_LABEL_VALUE_BUILDBOT_ASSETS_URL,
       "构建机器人资源URL"
@@ -472,10 +450,6 @@ MSG_HASH(
       "成就奖章"
       )
 MSG_HASH(
-      MENU_ENUM_LABEL_VALUE_CHEEVOS_LOCKED_ACHIEVEMENTS,
-      "已解锁的成就："
-      )
-MSG_HASH(
       MENU_ENUM_LABEL_VALUE_CHEEVOS_LOCKED_ENTRY,
       "锁定"
       )
@@ -486,10 +460,6 @@ MSG_HASH(
 MSG_HASH(
       MENU_ENUM_LABEL_VALUE_CHEEVOS_TEST_UNOFFICIAL,
       "非官方成就测试"
-      )
-MSG_HASH(
-      MENU_ENUM_LABEL_VALUE_CHEEVOS_UNLOCKED_ACHIEVEMENTS,
-      "未解锁的成就:"
       )
 MSG_HASH(
       MENU_ENUM_LABEL_VALUE_CHEEVOS_UNLOCKED_ENTRY,
@@ -624,10 +594,6 @@ MSG_HASH(MENU_ENUM_LABEL_VALUE_DIRECTORY_NOT_FOUND,
       "没有找到文件夹。")
 MSG_HASH(MENU_ENUM_LABEL_VALUE_DIRECTORY_SETTINGS,
       "文件夹")
-MSG_HASH(MENU_ENUM_LABEL_VALUE_DISK_CYCLE_TRAY_STATUS,
-      "Disk Cycle Tray Status")
-MSG_HASH(MENU_ENUM_LABEL_VALUE_DISK_IMAGE_APPEND,
-      "追加光盘镜像")
 MSG_HASH(MENU_ENUM_LABEL_VALUE_DISK_INDEX,
       "光盘索引")
 MSG_HASH(MENU_ENUM_LABEL_VALUE_DISK_OPTIONS,
@@ -640,10 +606,6 @@ MSG_HASH(MENU_ENUM_LABEL_VALUE_DOWNLOAD_CORE,
       "下载核心……")
 MSG_HASH(MENU_ENUM_LABEL_VALUE_DOWNLOAD_CORE_CONTENT,
       "下载游戏内容")
-MSG_HASH(MENU_ENUM_LABEL_VALUE_DPI_OVERRIDE_ENABLE,
-      "启用DPI覆盖")
-MSG_HASH(MENU_ENUM_LABEL_VALUE_DPI_OVERRIDE_VALUE,
-      "DPI覆盖")
 MSG_HASH(MENU_ENUM_LABEL_VALUE_DRIVER_SETTINGS,
       "驱动")
 MSG_HASH(MENU_ENUM_LABEL_VALUE_DUMMY_ON_CORE_SHUTDOWN,
@@ -734,28 +696,6 @@ MSG_HASH(MENU_ENUM_LABEL_VALUE_INPUT_ANALOG_RIGHT_Y_MINUS,
       "右摇杆Y- (上)")
 MSG_HASH(MENU_ENUM_LABEL_VALUE_INPUT_ANALOG_RIGHT_Y_PLUS,
       "右摇杆Y+ (下)")
-MSG_HASH(MENU_ENUM_LABEL_VALUE_INPUT_LIGHTGUN_TRIGGER,
-      "Gun Trigger")
-MSG_HASH(MENU_ENUM_LABEL_VALUE_INPUT_LIGHTGUN_RELOAD,
-      "Gun Reload")
-MSG_HASH(MENU_ENUM_LABEL_VALUE_INPUT_LIGHTGUN_AUX_A,
-      "Gun Aux A")
-MSG_HASH(MENU_ENUM_LABEL_VALUE_INPUT_LIGHTGUN_AUX_B,
-      "Gun Aux B")
-MSG_HASH(MENU_ENUM_LABEL_VALUE_INPUT_LIGHTGUN_AUX_C,
-      "Gun Aux C")
-MSG_HASH(MENU_ENUM_LABEL_VALUE_INPUT_LIGHTGUN_START,
-      "Gun Start")
-MSG_HASH(MENU_ENUM_LABEL_VALUE_INPUT_LIGHTGUN_SELECT,
-      "Gun Select")
-MSG_HASH(MENU_ENUM_LABEL_VALUE_INPUT_LIGHTGUN_DPAD_UP,
-      "Gun D-pad Up")
-MSG_HASH(MENU_ENUM_LABEL_VALUE_INPUT_LIGHTGUN_DPAD_DOWN,
-      "Gun D-pad Down")
-MSG_HASH(MENU_ENUM_LABEL_VALUE_INPUT_LIGHTGUN_DPAD_LEFT,
-      "Gun D-pad Left")
-MSG_HASH(MENU_ENUM_LABEL_VALUE_INPUT_LIGHTGUN_DPAD_RIGHT,
-      "Gun D-pad Right")
 MSG_HASH(MENU_ENUM_LABEL_VALUE_INPUT_AUTODETECT_ENABLE,
       "启用自动配置")
 MSG_HASH(MENU_ENUM_LABEL_VALUE_MENU_INPUT_SWAP_OK_CANCEL,
@@ -816,24 +756,6 @@ MSG_HASH(MENU_ENUM_LABEL_VALUE_INPUT_JOYPAD_Y,
       "Y键(左侧)")
 MSG_HASH(MENU_ENUM_LABEL_VALUE_INPUT_KEY,
       "(%s 键)")
-MSG_HASH(MENU_ENUM_LABEL_VALUE_INPUT_MOUSE_LEFT,
-      "Mouse 1")
-MSG_HASH(MENU_ENUM_LABEL_VALUE_INPUT_MOUSE_RIGHT,
-      "Mouse 2")
-MSG_HASH(MENU_ENUM_LABEL_VALUE_INPUT_MOUSE_MIDDLE,
-      "Mouse 3")
-MSG_HASH(MENU_ENUM_LABEL_VALUE_INPUT_MOUSE_BUTTON4,
-      "Mouse 4")
-MSG_HASH(MENU_ENUM_LABEL_VALUE_INPUT_MOUSE_BUTTON5,
-      "Mouse 5")
-MSG_HASH(MENU_ENUM_LABEL_VALUE_INPUT_MOUSE_WHEEL_UP,
-      "Wheel Up")
-MSG_HASH(MENU_ENUM_LABEL_VALUE_INPUT_MOUSE_WHEEL_DOWN,
-      "Wheel Down")
-MSG_HASH(MENU_ENUM_LABEL_VALUE_INPUT_MOUSE_HORIZ_WHEEL_UP,
-      "Wheel Left")
-MSG_HASH(MENU_ENUM_LABEL_VALUE_INPUT_MOUSE_HORIZ_WHEEL_DOWN,
-      "Wheel Right")
 MSG_HASH(MENU_ENUM_LABEL_VALUE_INPUT_KEYBOARD_GAMEPAD_MAPPING_TYPE,
       "键盘控制器映射类型")
 MSG_HASH(MENU_ENUM_LABEL_VALUE_INPUT_MAX_USERS,
@@ -944,7 +866,7 @@ MSG_HASH(MENU_ENUM_LABEL_VALUE_INPUT_TURBO_ENABLE,
       "连发开关")
 MSG_HASH(MENU_ENUM_LABEL_VALUE_INPUT_TURBO_PERIOD,
       "连发按键频率")
-MSG_HASH(MENU_ENUM_LABEL_VALUE_INPUT_USER_BINDS,
+MSG_HASH(MENU_ENUM_LABEL_VALUE_INPUT_USER_BINDS, /* TODO/FIXME - change User to Port */
       "输入用户 %u 的绑定")
 MSG_HASH(MENU_ENUM_LABEL_VALUE_LATENCY_SETTINGS,
       "延迟")
@@ -954,8 +876,10 @@ MSG_HASH(MENU_ENUM_LABEL_VALUE_JOYPAD_AUTOCONFIG_DIR,
       "输入设备自动配置文件夹")
 MSG_HASH(MENU_ENUM_LABEL_VALUE_JOYPAD_DRIVER,
       "手柄驱动")
+#ifdef HAVE_LAKKA
 MSG_HASH(MENU_ENUM_LABEL_VALUE_LAKKA_SERVICES,
       "Lakka 服务")
+#endif
 MSG_HASH(MENU_ENUM_LABEL_VALUE_LANG_CHINESE_SIMPLIFIED,
       "简体中文")
 MSG_HASH(MENU_ENUM_LABEL_VALUE_LANG_CHINESE_TRADITIONAL,
@@ -1053,7 +977,7 @@ MSG_HASH(MENU_ENUM_LABEL_VALUE_MENU_DRIVER,
 MSG_HASH(MENU_ENUM_LABEL_VALUE_MENU_ENUM_THROTTLE_FRAMERATE,
       "限制菜单帧率")
 MSG_HASH(MENU_ENUM_LABEL_VALUE_MENU_FILE_BROWSER_SETTINGS, /* TODO/FIXME - update */
-      "菜单文件浏览器")
+      "File Browser")
 MSG_HASH(MENU_ENUM_LABEL_VALUE_MENU_LINEAR_FILTER,
       "菜单线性过滤")
 MSG_HASH(MENU_ENUM_LABEL_VALUE_MENU_HORIZONTAL_ANIMATION,
@@ -1100,8 +1024,6 @@ MSG_HASH(MENU_ENUM_LABEL_VALUE_NETPLAY_ENABLE_CLIENT,
       "连接到游戏主机")
 MSG_HASH(MENU_ENUM_LABEL_VALUE_NETPLAY_ENABLE_HOST,
       "作为游戏主机")
-MSG_HASH(MENU_ENUM_LABEL_VALUE_NETPLAY_DISABLE_HOST,
-      "Stop netplay host")
 MSG_HASH(MENU_ENUM_LABEL_VALUE_NETPLAY_IP_ADDRESS,
       "服务器地址")
 MSG_HASH(MENU_ENUM_LABEL_VALUE_NETPLAY_LAN_SCAN_SETTINGS,
@@ -1135,14 +1057,6 @@ MSG_HASH(
 MSG_HASH(
     MENU_ENUM_LABEL_VALUE_NETPLAY_SHARE_DIGITAL_OR,
     "共用"
-    )
-MSG_HASH(
-    MENU_ENUM_LABEL_VALUE_NETPLAY_SHARE_DIGITAL_XOR,
-    "Grapple"
-    )
-MSG_HASH(
-    MENU_ENUM_LABEL_VALUE_NETPLAY_SHARE_DIGITAL_VOTE,
-    "Vote"
     )
 MSG_HASH(
     MENU_ENUM_LABEL_VALUE_NETPLAY_SHARE_NONE,
@@ -1429,8 +1343,10 @@ MSG_HASH(MENU_ENUM_LABEL_VALUE_RUN,
       "运行")
 MSG_HASH(MENU_ENUM_LABEL_VALUE_RUN_MUSIC,
       "运行")
+#ifdef HAVE_LAKKA
 MSG_HASH(MENU_ENUM_LABEL_VALUE_SAMBA_ENABLE,
       "启用SAMBA文件共享服务")
+#endif
 MSG_HASH(MENU_ENUM_LABEL_VALUE_SAVEFILE_DIRECTORY,
       "存档文件文件夹")
 MSG_HASH(MENU_ENUM_LABEL_VALUE_SAVESTATE_AUTO_INDEX,
@@ -1505,8 +1421,10 @@ MSG_HASH(MENU_ENUM_LABEL_VALUE_SORT_SAVEFILES_ENABLE,
       "排序文件夹中的游戏存档")
 MSG_HASH(MENU_ENUM_LABEL_VALUE_SORT_SAVESTATES_ENABLE,
       "排序文件夹中的即时存档")
+#ifdef HAVE_LAKKA
 MSG_HASH(MENU_ENUM_LABEL_VALUE_SSH_ENABLE,
       "启用SSH远程终端服务")
+#endif
 MSG_HASH(MENU_ENUM_LABEL_VALUE_START_CORE,
       "启动核心")
 MSG_HASH(MENU_ENUM_LABEL_VALUE_START_NET_RETROPAD,
@@ -1715,14 +1633,10 @@ MSG_HASH(
        MENU_ENUM_LABEL_VALUE_TIMEDATE_STYLE_MD_HM,
        "MM/DD HH:MM")
 MSG_HASH(
-       MENU_ENUM_LABEL_VALUE_TIMEDATE_STYLE_AM_PM,
+       MENU_ENUM_LABEL_VALUE_TIMEDATE_STYLE_HMS_AM_PM,
        "HH:MM:SS (AM/PM)")
 MSG_HASH(MENU_ENUM_LABEL_VALUE_TRUE,
       "是")
-MSG_HASH(MENU_ENUM_LABEL_VALUE_UI_COMPANION_ENABLE,
-      "UI Companion Enable")
-MSG_HASH(MENU_ENUM_LABEL_VALUE_UI_COMPANION_START_ON_BOOT,
-      "UI Companion Start On Boot")
 MSG_HASH(MENU_ENUM_LABEL_VALUE_UI_MENUBAR_ENABLE,
       "菜单栏")
 MSG_HASH(MENU_ENUM_LABEL_VALUE_UNABLE_TO_READ_COMPRESSED_FILE,
@@ -1909,24 +1823,6 @@ MSG_HASH(MENU_ENUM_LABEL_VALUE_XMB_FONT,
       "菜单字体")
 MSG_HASH(MENU_ENUM_LABEL_VALUE_XMB_ICON_THEME_CUSTOM,
       "自定义")
-MSG_HASH(MENU_ENUM_LABEL_VALUE_XMB_ICON_THEME_FLATUI,
-      "FlatUI")
-MSG_HASH(MENU_ENUM_LABEL_VALUE_XMB_ICON_THEME_MONOCHROME,
-      "Monochrome")
-MSG_HASH(MENU_ENUM_LABEL_VALUE_XMB_ICON_THEME_MONOCHROME_INVERTED,
-      "Monochrome Inverted")
-MSG_HASH(MENU_ENUM_LABEL_VALUE_XMB_ICON_THEME_SYSTEMATIC,
-      "Systematic")
-MSG_HASH(MENU_ENUM_LABEL_VALUE_XMB_ICON_THEME_NEOACTIVE,
-      "NeoActive")
-MSG_HASH(MENU_ENUM_LABEL_VALUE_XMB_ICON_THEME_PIXEL,
-      "Pixel")
-MSG_HASH(MENU_ENUM_LABEL_VALUE_XMB_ICON_THEME_RETROACTIVE,
-      "RetroActive")
-MSG_HASH(MENU_ENUM_LABEL_VALUE_XMB_ICON_THEME_RETROSYSTEM,
-      "Retrosystem")
-MSG_HASH(MENU_ENUM_LABEL_VALUE_XMB_ICON_THEME_DOTART,
-      "Dot-Art")
 MSG_HASH(MENU_ENUM_LABEL_VALUE_XMB_MENU_COLOR_THEME,
       "菜单颜色主题")
 MSG_HASH(MENU_ENUM_LABEL_VALUE_XMB_MENU_COLOR_THEME_APPLE_GREEN,
@@ -1951,7 +1847,7 @@ MSG_HASH(MENU_ENUM_LABEL_VALUE_XMB_MENU_COLOR_THEME_VOLCANIC_RED,
       "火山红")
 MSG_HASH(MENU_ENUM_LABEL_VALUE_XMB_RIBBON_ENABLE,
       "菜单渲染器管线")
-MSG_HASH(MENU_ENUM_LABEL_VALUE_XMB_SCALE_FACTOR,
+MSG_HASH(MENU_ENUM_LABEL_VALUE_MENU_SCALE_FACTOR,
       "菜单缩放因子")
 MSG_HASH(MENU_ENUM_LABEL_VALUE_XMB_SHADOWS_ENABLE,
       "启用图标阴影")
@@ -2034,8 +1930,10 @@ MSG_HASH(MENU_ENUM_SUBLABEL_ADD_CONTENT_LIST,
       "下载、扫描游戏内容，并将其加入你的收藏中。")
 MSG_HASH(MENU_ENUM_SUBLABEL_AUDIO_SETTINGS,
       "调整音频输出的选项。")
+#ifdef HAVE_LAKKA
 MSG_HASH(MENU_ENUM_SUBLABEL_BLUETOOTH_ENABLE,
       "启用或者禁止蓝牙。")
+#endif
 MSG_HASH(MENU_ENUM_SUBLABEL_CONFIG_SAVE_ON_EXIT,
       "程序将在退出时保存修改到配置文件。")
 MSG_HASH(MENU_ENUM_SUBLABEL_CONFIGURATION_SETTINGS,
@@ -2052,7 +1950,7 @@ MSG_HASH(MENU_ENUM_SUBLABEL_INPUT_MENU_ENUM_TOGGLE_GAMEPAD_COMBO,
       "控制器用来切出菜单的组合键。")
 MSG_HASH(MENU_ENUM_SUBLABEL_INPUT_SETTINGS,
       "调整游戏控制器、键盘和鼠标的设置。")
-MSG_HASH(MENU_ENUM_SUBLABEL_INPUT_USER_BINDS,
+MSG_HASH(MENU_ENUM_SUBLABEL_INPUT_USER_BINDS, /* TODO/FIXME - change user to port */
       "配置该用户的控制选项。")
 MSG_HASH(MENU_ENUM_SUBLABEL_LATENCY_SETTINGS,
       "更改关于视频、音频和输入延迟的设置。")
@@ -2067,14 +1965,18 @@ MSG_HASH(MENU_ENUM_SUBLABEL_INFORMATION_LIST_LIST,
       "显示数据库和光标的管理器。")
 MSG_HASH(MENU_ENUM_SUBLABEL_ONLINE_UPDATER,
       "下载并更新 RetroArch 的附加插件和组件。")
+#ifdef HAVE_LAKKA
 MSG_HASH(MENU_ENUM_SUBLABEL_SAMBA_ENABLE,
       "启用或者禁止网络文件夹共享(SAMBA)。")
 MSG_HASH(MENU_ENUM_SUBLABEL_SERVICES_SETTINGS,
       "管理操作系统层级的服务。")
+#endif
 MSG_HASH(MENU_ENUM_SUBLABEL_SHOW_HIDDEN_FILES,
       "在文件浏览器中显示隐藏的文件或文件夹。")
+#ifdef HAVE_LAKKA
 MSG_HASH(MENU_ENUM_SUBLABEL_SSH_ENABLE,
       "启用或者禁止远程终端访问(SSH)。")
+#endif
 MSG_HASH(MENU_ENUM_SUBLABEL_SUSPEND_SCREENSAVER_ENABLE,
       "阻止系统激活屏幕保护程序。")
 MSG_HASH(MENU_ENUM_SUBLABEL_USER_LANGUAGE,
@@ -2169,8 +2071,6 @@ MSG_HASH(MSG_DECOMPRESSION_ALREADY_IN_PROGRESS,
       "解压缩已在进行中。")
 MSG_HASH(MSG_DECOMPRESSION_FAILED,
       "解压缩失败。")
-MSG_HASH(MSG_DETECTED_VIEWPORT_OF,
-      "Detected viewport of")
 MSG_HASH(MSG_DID_NOT_FIND_A_VALID_CONTENT_PATCH,
       "没有找到有效的游戏内容补丁。")
 MSG_HASH(MSG_DISCONNECT_DEVICE_FROM_A_VALID_PORT,
@@ -2277,36 +2177,14 @@ MSG_HASH(MSG_FAILED_TO_UNDO_SAVE_STATE,
       "撤消即时存档失败。")
 MSG_HASH(MSG_FAILED_TO_UNMUTE_AUDIO,
       "取消静音失败。")
-MSG_HASH(MSG_FATAL_ERROR_RECEIVED_IN,
-      "Fatal error received in")
 MSG_HASH(MSG_FILE_NOT_FOUND,
       "未找到文件")
 MSG_HASH(MSG_FOUND_AUTO_SAVESTATE_IN,
       "已找到自动即时存档，位于：")
-MSG_HASH(MSG_FOUND_DISK_LABEL,
-      "Found disk label")
-MSG_HASH(MSG_FOUND_FIRST_DATA_TRACK_ON_FILE,
-      "Found first data track on file")
-MSG_HASH(MSG_FOUND_LAST_STATE_SLOT,
-      "Found last state slot")
-MSG_HASH(MSG_FOUND_SHADER,
-      "Found shader")
 MSG_HASH(MSG_FRAMES,
       "帧")
-MSG_HASH(MSG_GAME_SPECIFIC_CORE_OPTIONS_FOUND_AT,
-      "Per-Game Options: game-specific core options found at")
-MSG_HASH(MSG_GOT_INVALID_DISK_INDEX,
-      "Got invalid disk index.")
 MSG_HASH(MSG_GRAB_MOUSE_STATE,
       "抓取鼠标状态")
-MSG_HASH(MSG_GAME_FOCUS_ON,
-      "Game focus on")
-MSG_HASH(MSG_GAME_FOCUS_OFF,
-      "Game focus off")
-MSG_HASH(MSG_HW_RENDERED_MUST_USE_POSTSHADED_RECORDING,
-      "Libretro core is hardware rendered. Must use post-shaded recording as well.")
-MSG_HASH(MSG_INFLATED_CHECKSUM_DID_NOT_MATCH_CRC32,
-      "Inflated checksum did not match CRC32.")
 MSG_HASH(MSG_INPUT_CHEAT,
       "输入金手指")
 MSG_HASH(MSG_INPUT_CHEAT_FILENAME,
@@ -2329,8 +2207,6 @@ MSG_HASH(MSG_IN_GIGABYTES,
       "（GB）")
 MSG_HASH(MSG_IN_MEGABYTES,
       "（MB）")
-MSG_HASH(MSG_LIBRETRO_ABI_BREAK,
-      "is compiled against a different version of libretro than this libretro implementation.")
 MSG_HASH(MSG_LIBRETRO_FRONTEND,
       "为libretro而设计的前端")
 MSG_HASH(MSG_LOADED_STATE_FROM_SLOT,
@@ -2531,14 +2407,6 @@ MSG_HASH(
    "同步音频。推荐。"
    )
 MSG_HASH(
-   MENU_ENUM_SUBLABEL_INPUT_BIND_TIMEOUT,
-   "Amount of seconds to wait until proceeding to the next bind."
-   )
-MSG_HASH(
-   MENU_ENUM_SUBLABEL_INPUT_BIND_HOLD,
-   "Amount of seconds to hold an input to bind it."
-   )
-MSG_HASH(
    MENU_ENUM_SUBLABEL_INPUT_TURBO_PERIOD,
    "连发时每两次按键之间的间隔帧数。"
    )
@@ -2573,10 +2441,6 @@ MSG_HASH(
 MSG_HASH(
    MENU_ENUM_SUBLABEL_AUDIO_ENABLE,
    "启用音频输出。"
-   )
-MSG_HASH(
-   MENU_ENUM_SUBLABEL_AUDIO_MAX_TIMING_SKEW,
-   "The maximum change in audio input rate. You may want to increase this to enable very large changes in timing, for example running PAL cores on NTSC displays, at the cost of inaccurate audio pitch."
    )
 MSG_HASH(
    MSG_FAILED,
@@ -2770,14 +2634,6 @@ MSG_HASH(
       "使用 GPU 输出来进行截图（如果可能的话）。"
       )
 MSG_HASH(
-      MENU_ENUM_SUBLABEL_VIDEO_ROTATION,
-      "Forces a certain rotation of the screen. The rotation is added to rotations which the core sets."
-      )
-MSG_HASH(
-      MENU_ENUM_SUBLABEL_VIDEO_FORCE_SRGB_DISABLE,
-      "Forcibly disable sRGB FBO support. Some Intel OpenGL drivers on Windows have video problems with sRGB FBO support if this is enabled. Enabling this can work around it."
-      )
-MSG_HASH(
       MENU_ENUM_SUBLABEL_VIDEO_FULLSCREEN,
       "以全屏模式开始。运行时可以切换到窗口模式。"
       )
@@ -2828,18 +2684,6 @@ MSG_HASH(
     "游戏加载时自动应用金手指。"
 )
 MSG_HASH(
-    MENU_ENUM_SUBLABEL_CHEAT_REPEAT_COUNT,
-    "The number of times the cheat will be applied.  Use with the other two Iteration options to affect large areas of memory."
-    )
-MSG_HASH(
-    MENU_ENUM_SUBLABEL_CHEAT_REPEAT_ADD_TO_ADDRESS,
-    "After each 'Number of Iterations' the Memory Address will be increased by this number times the 'Memory Search Size'."
-)
-MSG_HASH(
-    MENU_ENUM_SUBLABEL_CHEAT_REPEAT_ADD_TO_VALUE,
-    "After each 'Number of Iterations' the Value will be increased by this amount."
-    )
-MSG_HASH(
       MENU_ENUM_SUBLABEL_REWIND_GRANULARITY,
       "每次回溯时回退的帧数。数值越高，回溯越快。"
       )
@@ -2858,18 +2702,6 @@ MSG_HASH(
     "列表中的索引位置。"
     )
 MSG_HASH(
-    MENU_ENUM_SUBLABEL_CHEAT_ADDRESS_BIT_POSITION,
-    "Address bitmask when Memory Search Size < 8-bit."
-    )
-MSG_HASH(
-    MENU_ENUM_SUBLABEL_CHEAT_MATCH_IDX,
-    "Select the match to view."
-    )
-MSG_HASH(
-    MENU_ENUM_SUBLABEL_CHEAT_START_OR_CONT,
-    ""
-    )
-MSG_HASH(
     MENU_ENUM_SUBLABEL_CHEAT_START_OR_RESTART,
     "使用 左/右 按钮改变大小。"
     )
@@ -2878,82 +2710,10 @@ MSG_HASH(
     "使用 左/右 按钮改变数值。"
     )
 MSG_HASH(
-    MENU_ENUM_SUBLABEL_CHEAT_SEARCH_LT,
-    ""
-    )
-MSG_HASH(
-    MENU_ENUM_SUBLABEL_CHEAT_SEARCH_GT,
-    ""
-    )
-MSG_HASH(
-    MENU_ENUM_SUBLABEL_CHEAT_SEARCH_LTE,
-    ""
-    )
-MSG_HASH(
-    MENU_ENUM_SUBLABEL_CHEAT_SEARCH_GTE,
-    ""
-    )
-MSG_HASH(
-    MENU_ENUM_SUBLABEL_CHEAT_SEARCH_EQ,
-    ""
-    )
-MSG_HASH(
-    MENU_ENUM_SUBLABEL_CHEAT_SEARCH_NEQ,
-    ""
-    )
-MSG_HASH(
-    MENU_ENUM_SUBLABEL_CHEAT_SEARCH_EQPLUS,
-    "Left/Right to change value"
-    )
-MSG_HASH(
-    MENU_ENUM_SUBLABEL_CHEAT_SEARCH_EQMINUS,
-    "Left/Right to change value"
-    )
-MSG_HASH(
-    MENU_ENUM_SUBLABEL_CHEAT_ADD_MATCHES,
-    ""
-    )
-MSG_HASH(
-    MENU_ENUM_SUBLABEL_CHEAT_VIEW_MATCHES,
-    ""
-    )
-MSG_HASH(
-    MENU_ENUM_SUBLABEL_CHEAT_CREATE_OPTION,
-    ""
-    )
-MSG_HASH(
-    MENU_ENUM_SUBLABEL_CHEAT_DELETE_OPTION,
-    ""
-    )
-MSG_HASH(
-    MENU_ENUM_SUBLABEL_CHEAT_ADD_NEW_TOP,
-    ""
-    )
-MSG_HASH(
-    MENU_ENUM_SUBLABEL_CHEAT_ADD_NEW_BOTTOM,
-    ""
-    )
-MSG_HASH(
-    MENU_ENUM_SUBLABEL_CHEAT_DELETE_ALL,
-    ""
-    )
-MSG_HASH(
-    MENU_ENUM_SUBLABEL_CHEAT_RELOAD_CHEATS,
-    ""
-    )
-MSG_HASH(
     MENU_ENUM_SUBLABEL_CHEAT_BIG_ENDIAN,
     "大字节：258 = 0x0102,\n"
     "小字节：258 = 0x0201"
     )
-MSG_HASH(
-      MENU_ENUM_SUBLABEL_LIBRETRO_LOG_LEVEL,
-      "Sets log level for cores. If a log level issued by a core is below this value, it is ignored."
-      )
-MSG_HASH(
-      MENU_ENUM_SUBLABEL_PERFCNT_ENABLE,
-      "Enable performance counters for RetroArch (and cores)."
-      )
 MSG_HASH(
       MENU_ENUM_SUBLABEL_SAVESTATE_AUTO_SAVE,
       "在 RetroArch 关闭时自动保存即时存档。\n"
@@ -3294,10 +3054,6 @@ MSG_HASH(MENU_ENUM_SUBLABEL_SYSTEM_DIRECTORY,
       "设置系统文件夹。固件和 BIOS 存放在这里。")
 MSG_HASH(MENU_ENUM_SUBLABEL_RGUI_BROWSER_DIRECTORY,
       "设置文件管理器的起始文件夹。")
-MSG_HASH(
-      MENU_ENUM_SUBLABEL_CONTENT_DIR,
-      "Usually set by developers who bundle libretro/RetroArch apps to point to assets."
-      )
 MSG_HASH(MENU_ENUM_SUBLABEL_DYNAMIC_WALLPAPERS_DIRECTORY,
       "设置动态壁纸文件夹。根据上下文动态加载菜单的壁纸。")
 MSG_HASH(MENU_ENUM_SUBLABEL_THUMBNAILS_DIRECTORY,
@@ -3313,14 +3069,8 @@ MSG_HASH(MENU_ENUM_SUBLABEL_NETPLAY_INPUT_LATENCY_FRAMES_RANGE,
       "设置按键延迟范围以掩盖网络的延迟。\n"
       "用一定的按键延迟换取在线游戏时\n"
       "降低 CPU 负载并减少顿卡。")
-MSG_HASH(MENU_ENUM_SUBLABEL_DISK_CYCLE_TRAY_STATUS,
-      "Cycle the current disk. If the disk is inserted, it will eject the disk. If the disk has not been inserted, it will be inserted. ")
-MSG_HASH(MENU_ENUM_SUBLABEL_DISK_INDEX,
-      "更改磁盘索引。")
 MSG_HASH(MENU_ENUM_SUBLABEL_DISK_OPTIONS,
       "管理磁盘映像。")
-MSG_HASH(MENU_ENUM_SUBLABEL_DISK_IMAGE_APPEND,
-      "选择要插入的磁盘映像。")
 MSG_HASH(MENU_ENUM_SUBLABEL_MENU_ENUM_THROTTLE_FRAMERATE,
       "确保菜单内的帧率上限。")
 MSG_HASH(MENU_ENUM_SUBLABEL_VRR_RUNLOOP_ENABLE,
@@ -3361,16 +3111,6 @@ MSG_HASH(MENU_ENUM_SUBLABEL_CONTENT_SHOW_ADD,
       "在主菜单中显示导入内容页。")
 MSG_HASH(MENU_ENUM_SUBLABEL_CONTENT_SHOW_PLAYLISTS,
       "在主菜单中显示游戏列表页")
-MSG_HASH(MENU_ENUM_SUBLABEL_RGUI_SHOW_START_SCREEN,
-      "Show startup screen in menu. This is automatically set to false after the program starts for the first time.")
-MSG_HASH(MENU_ENUM_SUBLABEL_MATERIALUI_MENU_HEADER_OPACITY,
-      "Modify the opacity of the header graphic.")
-MSG_HASH(MENU_ENUM_SUBLABEL_MATERIALUI_MENU_FOOTER_OPACITY,
-      "Modify the opacity of the footer graphic.")
-MSG_HASH(MENU_ENUM_SUBLABEL_DPI_OVERRIDE_ENABLE,
-      "The menu normally scales itself dynamically. If you want to set a specific scaling size instead, enable this.")
-MSG_HASH(MENU_ENUM_SUBLABEL_DPI_OVERRIDE_VALUE,
-      "Set the custom scaling size here. NOTE: You have to enable 'DPI Override' for this scaling size to take effect.")
 MSG_HASH(MENU_ENUM_SUBLABEL_CORE_ASSETS_DIRECTORY,
       "保存下载文件的文件夹。")
 MSG_HASH(MENU_ENUM_SUBLABEL_INPUT_REMAPPING_DIRECTORY,
@@ -3729,10 +3469,6 @@ MSG_HASH(MENU_ENUM_LABEL_VALUE_VIDEO_MESSAGE_COLOR_BLUE,
       "屏显消息（OSD）RGB颜色 蓝色")
 MSG_HASH(MENU_ENUM_LABEL_VALUE_FRAMECOUNT_SHOW,
       "显示FPS帧数")
-MSG_HASH(MENU_ENUM_LABEL_VALUE_AUTOMATICALLY_ADD_CONTENT_TO_PLAYLIST,
-      "自动添加内容到游戏列表")
-MSG_HASH(MENU_ENUM_SUBLABEL_AUTOMATICALLY_ADD_CONTENT_TO_PLAYLIST,
-      "自动扫描游戏文件，并添加在游戏列表中。")
 MSG_HASH(MSG_SCANNING_OF_FILE_FINISHED,
       "文件扫描完成")
 MSG_HASH(MENU_ENUM_LABEL_VALUE_AUDIO_RESAMPLER_QUALITY,
@@ -3749,21 +3485,10 @@ MSG_HASH(MENU_ENUM_LABEL_VALUE_STATISTICS_SHOW,
       "显示参数信息")
 MSG_HASH(MENU_ENUM_SUBLABEL_STATISTICS_SHOW,
       "游戏运行时在显示器上显示相关技术参数信息。")
-MSG_HASH(MENU_ENUM_LABEL_VALUE_MENU_RGUI_BORDER_FILLER_ENABLE,
-      "Enable border filler")
-MSG_HASH(MENU_ENUM_LABEL_VALUE_MENU_RGUI_BORDER_FILLER_THICKNESS_ENABLE,
-      "Enable border filler thickness")
-MSG_HASH(MENU_ENUM_LABEL_VALUE_MENU_RGUI_BACKGROUND_FILLER_THICKNESS_ENABLE,
-      "Enable background filler thickness")
 MSG_HASH(MENU_ENUM_SUBLABEL_CRT_SWITCH_RESOLUTION,
       "仅适用于 CRT 显示器。\n"
       "尽可能输出原汁原味的信号。")
 MSG_HASH(MENU_ENUM_LABEL_VALUE_CRT_SWITCH_RESOLUTION, "CRT 原生输出")
-MSG_HASH(
-      MENU_ENUM_SUBLABEL_CRT_SWITCH_RESOLUTION_SUPER,
-      "Switch among native and ultrawide super resolutions."
-      )
-MSG_HASH(MENU_ENUM_LABEL_VALUE_CRT_SWITCH_RESOLUTION_SUPER, "CRT Super Resolution")
 MSG_HASH(MENU_ENUM_LABEL_VALUE_CONTENT_SHOW_REWIND,
       "显示「回溯」设置")
 MSG_HASH(MENU_ENUM_SUBLABEL_CONTENT_SHOW_REWIND,
@@ -3802,10 +3527,6 @@ MSG_HASH(MENU_ENUM_SUBLABEL_MIXER_ACTION_REMOVE,
       "这将停止播放音频流，并将其完全从内存中删除。")
 MSG_HASH(MENU_ENUM_SUBLABEL_MIXER_ACTION_VOLUME,
       "调整音频流的音量。")
-MSG_HASH(MENU_ENUM_SUBLABEL_ADD_TO_MIXER,
-      "Add this audio track to an available audio stream slot. If no slots are currently available, it will be ignored.")
-MSG_HASH(MENU_ENUM_SUBLABEL_ADD_TO_MIXER_AND_PLAY,
-      "Add this audio track to an available audio stream slot and play it. If no slots are currently available, it will be ignored.")
 MSG_HASH(MENU_ENUM_LABEL_VALUE_MIXER_ACTION_PLAY,
       "播放")
 MSG_HASH(MENU_ENUM_LABEL_VALUE_MIXER_ACTION_PLAY_LOOPED,
@@ -3822,16 +3543,6 @@ MSG_HASH(MENU_ENUM_LABEL_VALUE_DETECT_CORE_LIST_OK_CURRENT_CORE,
       "当前核心")
 MSG_HASH(MENU_ENUM_LABEL_VALUE_QT_MENU_SEARCH_CLEAR,
       "清除")
-MSG_HASH(MENU_ENUM_LABEL_VALUE_DISCORD_IN_MENU,
-      "In-Menu")
-MSG_HASH(MENU_ENUM_LABEL_VALUE_DISCORD_IN_GAME,
-      "In-Game")
-MSG_HASH(MENU_ENUM_LABEL_VALUE_DISCORD_IN_GAME_PAUSED,
-      "In-Game (Paused)")
-MSG_HASH(MENU_ENUM_LABEL_VALUE_DISCORD_STATUS_PLAYING,
-      "Playing")
-MSG_HASH(MENU_ENUM_LABEL_VALUE_DISCORD_STATUS_PAUSED,
-      "Paused")
 MSG_HASH(MENU_ENUM_LABEL_VALUE_DISCORD_ALLOW,
       "开启 Discord")
 MSG_HASH(MENU_ENUM_SUBLABEL_DISCORD_ALLOW,
@@ -3859,10 +3570,6 @@ MSG_HASH(MENU_ENUM_LABEL_VALUE_SYSTEM_INFO_MPV_SUPPORT,
 MSG_HASH(
     MENU_ENUM_LABEL_VALUE_CHEAT_IDX,
     "索引"
-    )
-MSG_HASH(
-    MENU_ENUM_LABEL_VALUE_CHEAT_MATCH_IDX,
-    "View Match #"
     )
 MSG_HASH(
     MENU_ENUM_LABEL_VALUE_CHEAT_MATCH,
@@ -3897,66 +3604,6 @@ MSG_HASH(
     "处理程序"
     )
 MSG_HASH(
-    MENU_ENUM_LABEL_VALUE_CHEAT_MEMORY_SEARCH_SIZE,
-    "Memory Search Size"
-    )
-MSG_HASH(
-    MENU_ENUM_LABEL_VALUE_CHEAT_TYPE,
-    "Type"
-    )
-MSG_HASH(
-    MENU_ENUM_LABEL_VALUE_CHEAT_VALUE,
-    "Value"
-    )
-MSG_HASH(
-    MENU_ENUM_LABEL_VALUE_CHEAT_ADDRESS,
-    "Memory Address"
-    )
-MSG_HASH(
-    MENU_ENUM_LABEL_VALUE_CHEAT_ADDRESS_BIT_POSITION,
-    "Memory Address Mask"
-    )
-MSG_HASH(
-    MENU_ENUM_LABEL_VALUE_CHEAT_RUMBLE_TYPE,
-    "Rumble When Memory"
-    )
-MSG_HASH(
-    MENU_ENUM_LABEL_VALUE_CHEAT_RUMBLE_VALUE,
-    "Rumble Value"
-    )
-MSG_HASH(
-    MENU_ENUM_LABEL_VALUE_CHEAT_RUMBLE_PORT,
-    "Rumble Port"
-    )
-MSG_HASH(
-    MENU_ENUM_LABEL_VALUE_CHEAT_RUMBLE_PRIMARY_STRENGTH,
-    "Rumble Primary Strength"
-    )
-MSG_HASH(
-    MENU_ENUM_LABEL_VALUE_CHEAT_RUMBLE_PRIMARY_DURATION,
-    "Rumble Primary Duration (ms)"
-    )
-MSG_HASH(
-    MENU_ENUM_LABEL_VALUE_CHEAT_RUMBLE_SECONDARY_STRENGTH,
-    "Rumble Secondary Strength"
-    )
-MSG_HASH(
-    MENU_ENUM_LABEL_VALUE_CHEAT_RUMBLE_SECONDARY_DURATION,
-    "Rumble Secondary Duration (ms)"
-    )
-MSG_HASH(
-    MENU_ENUM_LABEL_VALUE_CHEAT_REPEAT_COUNT,
-    "Number of Iterations"
-)
-MSG_HASH(
-    MENU_ENUM_LABEL_VALUE_CHEAT_REPEAT_ADD_TO_VALUE,
-    "Value Increase Each Iteration"
-)
-MSG_HASH(
-    MENU_ENUM_LABEL_VALUE_CHEAT_REPEAT_ADD_TO_ADDRESS,
-    "Address Increase Each Iteration"
-)
-MSG_HASH(
     MENU_ENUM_LABEL_VALUE_CHEAT_ADD_NEW_AFTER,
     "在当前之后添加新的金手指"
     )
@@ -3979,178 +3626,6 @@ MSG_HASH(
 MSG_HASH(
     MENU_ENUM_LABEL_CHEAT_HANDLER_TYPE_EMU,
     "模拟器"
-    )
-MSG_HASH(
-    MENU_ENUM_LABEL_CHEAT_HANDLER_TYPE_RETRO,
-    "RetroArch"
-    )
-MSG_HASH(
-    MENU_ENUM_LABEL_CHEAT_TYPE_DISABLED,
-    "<Disabled>"
-    )
-MSG_HASH(
-    MENU_ENUM_LABEL_CHEAT_TYPE_SET_TO_VALUE,
-    "Set To Value"
-    )
-MSG_HASH(
-    MENU_ENUM_LABEL_CHEAT_TYPE_INCREASE_VALUE,
-    "Increase By Value"
-    )
-MSG_HASH(
-    MENU_ENUM_LABEL_CHEAT_TYPE_DECREASE_VALUE,
-    "Decrease By Value"
-    )
-MSG_HASH(
-    MENU_ENUM_LABEL_CHEAT_TYPE_RUN_NEXT_IF_EQ,
-    "Run next cheat if value = memory"
-    )
-MSG_HASH(
-    MENU_ENUM_LABEL_CHEAT_TYPE_RUN_NEXT_IF_NEQ,
-    "Run next cheat if value != memory"
-    )
-MSG_HASH(
-    MENU_ENUM_LABEL_CHEAT_TYPE_RUN_NEXT_IF_LT,
-    "Run next cheat if value < memory"
-    )
-MSG_HASH(
-    MENU_ENUM_LABEL_CHEAT_TYPE_RUN_NEXT_IF_GT,
-    "Run next cheat if value > memory"
-    )
-MSG_HASH(
-    MENU_ENUM_LABEL_RUMBLE_TYPE_DISABLED,
-    "<Disabled>"
-    )
-MSG_HASH(
-    MENU_ENUM_LABEL_RUMBLE_TYPE_CHANGES,
-    "Changes"
-    )
-MSG_HASH(
-    MENU_ENUM_LABEL_RUMBLE_TYPE_DOES_NOT_CHANGE,
-    "Does Not Change"
-    )
-MSG_HASH(
-    MENU_ENUM_LABEL_RUMBLE_TYPE_INCREASE,
-    "Increases"
-    )
-MSG_HASH(
-    MENU_ENUM_LABEL_RUMBLE_TYPE_DECREASE,
-    "Decreases"
-    )
-MSG_HASH(
-    MENU_ENUM_LABEL_RUMBLE_TYPE_EQ_VALUE,
-    "= Rumble Value"
-    )
-MSG_HASH(
-    MENU_ENUM_LABEL_RUMBLE_TYPE_NEQ_VALUE,
-    "!= Rumble Value"
-    )
-MSG_HASH(
-    MENU_ENUM_LABEL_RUMBLE_TYPE_LT_VALUE,
-    "< Rumble Value"
-    )
-MSG_HASH(
-    MENU_ENUM_LABEL_RUMBLE_TYPE_GT_VALUE,
-    "> Rumble Value"
-    )
-MSG_HASH(
-    MENU_ENUM_LABEL_RUMBLE_TYPE_INCREASE_BY_VALUE,
-    "Increases by Rumble Value"
-    )
-MSG_HASH(
-    MENU_ENUM_LABEL_RUMBLE_TYPE_DECREASE_BY_VALUE,
-    "Decreases by Rumble Value"
-    )
-MSG_HASH(
-    MENU_ENUM_LABEL_CHEAT_MEMORY_SIZE_1,
-    "1-bit, max value = 0x01"
-    )
-MSG_HASH(
-    MENU_ENUM_LABEL_CHEAT_MEMORY_SIZE_2,
-    "2-bit, max value = 0x03"
-    )
-MSG_HASH(
-    MENU_ENUM_LABEL_CHEAT_MEMORY_SIZE_4,
-    "4-bit, max value = 0x0F"
-    )
-MSG_HASH(
-    MENU_ENUM_LABEL_CHEAT_MEMORY_SIZE_8,
-    "8-bit, max value = 0xFF"
-    )
-MSG_HASH(
-    MENU_ENUM_LABEL_CHEAT_MEMORY_SIZE_16,
-    "16-bit, max value = 0xFFFF"
-    )
-MSG_HASH(
-    MENU_ENUM_LABEL_CHEAT_MEMORY_SIZE_32,
-    "32-bit, max value = 0xFFFFFFFF"
-    )
-MSG_HASH(
-    MENU_ENUM_LABEL_RUMBLE_PORT_0,
-    "1"
-    )
-MSG_HASH(
-    MENU_ENUM_LABEL_RUMBLE_PORT_1,
-    "2"
-    )
-MSG_HASH(
-    MENU_ENUM_LABEL_RUMBLE_PORT_2,
-    "3"
-    )
-MSG_HASH(
-    MENU_ENUM_LABEL_RUMBLE_PORT_3,
-    "4"
-    )
-MSG_HASH(
-    MENU_ENUM_LABEL_RUMBLE_PORT_4,
-    "5"
-    )
-MSG_HASH(
-    MENU_ENUM_LABEL_RUMBLE_PORT_5,
-    "6"
-    )
-MSG_HASH(
-    MENU_ENUM_LABEL_RUMBLE_PORT_6,
-    "7"
-    )
-MSG_HASH(
-    MENU_ENUM_LABEL_RUMBLE_PORT_7,
-    "8"
-    )
-MSG_HASH(
-    MENU_ENUM_LABEL_RUMBLE_PORT_8,
-    "9"
-    )
-MSG_HASH(
-    MENU_ENUM_LABEL_RUMBLE_PORT_9,
-    "10"
-    )
-MSG_HASH(
-    MENU_ENUM_LABEL_RUMBLE_PORT_10,
-    "11"
-    )
-MSG_HASH(
-    MENU_ENUM_LABEL_RUMBLE_PORT_11,
-    "12"
-    )
-MSG_HASH(
-    MENU_ENUM_LABEL_RUMBLE_PORT_12,
-    "13"
-    )
-MSG_HASH(
-    MENU_ENUM_LABEL_RUMBLE_PORT_13,
-    "14"
-    )
-MSG_HASH(
-    MENU_ENUM_LABEL_RUMBLE_PORT_14,
-    "15"
-    )
-MSG_HASH(
-    MENU_ENUM_LABEL_RUMBLE_PORT_15,
-    "16"
-    )
-MSG_HASH(
-    MENU_ENUM_LABEL_RUMBLE_PORT_16,
-    "All"
     )
 MSG_HASH(
     MENU_ENUM_LABEL_VALUE_CHEAT_START_OR_CONT,
@@ -4269,340 +3744,8 @@ MSG_HASH(
     "开始或继续金手指搜索"
     )
 MSG_HASH(
-    MSG_CHEAT_INIT_SUCCESS,
-    "Successfully started cheat search"
-    )
-MSG_HASH(
-    MSG_CHEAT_INIT_FAIL,
-    "Failed to start cheat search"
-    )
-MSG_HASH(
-    MSG_CHEAT_SEARCH_NOT_INITIALIZED,
-    "Searching has not been initialized/started"
-    )
-MSG_HASH(
-    MSG_CHEAT_SEARCH_FOUND_MATCHES,
-    "New match count = %u"
-    )
-MSG_HASH(
-    MENU_ENUM_LABEL_VALUE_CHEAT_BIG_ENDIAN,
-    "大字节"
-    )
-MSG_HASH(
-    MSG_CHEAT_SEARCH_ADDED_MATCHES_SUCCESS,
-    "Added %u matches"
-    )
-MSG_HASH(
-    MSG_CHEAT_SEARCH_ADDED_MATCHES_FAIL,
-    "Failed to add matches"
-    )
-MSG_HASH(
-    MSG_CHEAT_SEARCH_ADD_MATCH_SUCCESS,
-    "Created code from match"
-    )
-MSG_HASH(
-    MSG_CHEAT_SEARCH_ADD_MATCH_FAIL,
-    "Failed to create code"
-    )
-MSG_HASH(
-    MSG_CHEAT_SEARCH_DELETE_MATCH_SUCCESS,
-    "Deleted match"
-    )
-MSG_HASH(
-    MSG_CHEAT_SEARCH_ADDED_MATCHES_TOO_MANY,
-    "Not enough room.  The total number of cheats you can have is 100."
-    )
-MSG_HASH(
-    MSG_CHEAT_ADD_TOP_SUCCESS,
-    "New cheat added to top of list."
-    )
-MSG_HASH(
-    MSG_CHEAT_ADD_BOTTOM_SUCCESS,
-    "New cheat added to bottom of list."
-    )
-MSG_HASH(
-    MSG_CHEAT_DELETE_ALL_INSTRUCTIONS,
-    "Press right five times to delete all cheats."
-    )
-MSG_HASH(
-    MSG_CHEAT_DELETE_ALL_SUCCESS,
-    "All cheats deleted."
-    )
-MSG_HASH(
-    MSG_CHEAT_ADD_BEFORE_SUCCESS,
-    "New cheat added before this one."
-    )
-MSG_HASH(
-    MSG_CHEAT_ADD_AFTER_SUCCESS,
-    "New cheat added after this one."
-    )
-MSG_HASH(
-    MSG_CHEAT_COPY_BEFORE_SUCCESS,
-    "Cheat copied before this one."
-    )
-MSG_HASH(
-    MSG_CHEAT_COPY_AFTER_SUCCESS,
-    "Cheat copied after this one."
-    )
-MSG_HASH(
-    MSG_CHEAT_DELETE_SUCCESS,
-    "Cheat deleted."
-    )
-MSG_HASH(
-    MENU_ENUM_LABEL_VALUE_QT_PROGRESS,
-    "Progress:"
-    )
-MSG_HASH(
-    MENU_ENUM_LABEL_VALUE_QT_MENU_VIEW_OPTIONS_ALL_PLAYLISTS_LIST_MAX_COUNT,
-    "\"All Playlists\" max list entries:"
-    )
-MSG_HASH(
-    MENU_ENUM_LABEL_VALUE_QT_MENU_VIEW_OPTIONS_ALL_PLAYLISTS_GRID_MAX_COUNT,
-    "\"All Playlists\" max grid entries:"
-    )
-MSG_HASH(
-    MENU_ENUM_LABEL_VALUE_QT_MENU_VIEW_OPTIONS_SHOW_HIDDEN_FILES,
-    "Show hidden files and folders:"
-    )
-MSG_HASH(
-    MENU_ENUM_LABEL_VALUE_QT_NEW_PLAYLIST,
-    "New Playlist"
-    )
-MSG_HASH(
-    MENU_ENUM_LABEL_VALUE_QT_ENTER_NEW_PLAYLIST_NAME,
-    "Please enter the new playlist name:"
-    )
-MSG_HASH(
-    MENU_ENUM_LABEL_VALUE_QT_DELETE_PLAYLIST,
-    "Delete Playlist"
-    )
-MSG_HASH(
-    MENU_ENUM_LABEL_VALUE_QT_RENAME_PLAYLIST,
-    "Rename Playlist"
-    )
-MSG_HASH(
-    MENU_ENUM_LABEL_VALUE_QT_CONFIRM_DELETE_PLAYLIST,
-    "Are you sure you want to delete the playlist \"%1\"?"
-    )
-MSG_HASH(
-    MENU_ENUM_LABEL_VALUE_QT_QUESTION,
-    "Question"
-    )
-MSG_HASH(
-    MENU_ENUM_LABEL_VALUE_QT_COULD_NOT_DELETE_FILE,
-    "Could not delete file."
-    )
-MSG_HASH(
-    MENU_ENUM_LABEL_VALUE_QT_COULD_NOT_RENAME_FILE,
-    "Could not rename file."
-    )
-MSG_HASH(
-    MENU_ENUM_LABEL_VALUE_QT_GATHERING_LIST_OF_FILES,
-    "Gathering list of files..."
-    )
-MSG_HASH(
-    MENU_ENUM_LABEL_VALUE_QT_ADDING_FILES_TO_PLAYLIST,
-    "Adding files to playlist..."
-    )
-MSG_HASH(
-    MENU_ENUM_LABEL_VALUE_QT_PLAYLIST_ENTRY,
-    "Playlist Entry"
-    )
-MSG_HASH(
-    MENU_ENUM_LABEL_VALUE_QT_PLAYLIST_ENTRY_NAME,
-    "Name:"
-    )
-MSG_HASH(
-    MENU_ENUM_LABEL_VALUE_QT_PLAYLIST_ENTRY_PATH,
-    "Path:"
-    )
-MSG_HASH(
-    MENU_ENUM_LABEL_VALUE_QT_PLAYLIST_ENTRY_CORE,
-    "Core:"
-    )
-MSG_HASH(
-    MENU_ENUM_LABEL_VALUE_QT_PLAYLIST_ENTRY_DATABASE,
-    "Database:"
-    )
-MSG_HASH(
-    MENU_ENUM_LABEL_VALUE_QT_PLAYLIST_ENTRY_EXTENSIONS,
-    "Extensions:"
-    )
-MSG_HASH(
-    MENU_ENUM_LABEL_VALUE_QT_PLAYLIST_ENTRY_EXTENSIONS_PLACEHOLDER,
-    "(space-separated; includes all by default)"
-    )
-MSG_HASH(
-    MENU_ENUM_LABEL_VALUE_QT_PLAYLIST_ENTRY_FILTER_INSIDE_ARCHIVES,
-    "Filter inside archives"
-    )
-MSG_HASH(
-    MENU_ENUM_LABEL_VALUE_QT_FOR_THUMBNAILS,
-    "(used to find thumbnails)"
-    )
-MSG_HASH(
-    MENU_ENUM_LABEL_VALUE_QT_CONFIRM_DELETE_PLAYLIST_ITEM,
-    "Are you sure you want to delete the item \"%1\"?"
-    )
-MSG_HASH(
-    MENU_ENUM_LABEL_VALUE_QT_CANNOT_ADD_TO_ALL_PLAYLISTS,
-    "Please choose a single playlist first."
-    )
-MSG_HASH(
-    MENU_ENUM_LABEL_VALUE_QT_DELETE,
-    "Delete"
-    )
-MSG_HASH(
-    MENU_ENUM_LABEL_VALUE_QT_ADD_ENTRY,
-    "Add Entry..."
-    )
-MSG_HASH(
-    MENU_ENUM_LABEL_VALUE_QT_ADD_FILES,
-    "Add File(s)..."
-    )
-MSG_HASH(
-    MENU_ENUM_LABEL_VALUE_QT_ADD_FOLDER,
-    "Add Folder..."
-    )
-MSG_HASH(
-    MENU_ENUM_LABEL_VALUE_QT_EDIT,
-    "Edit"
-    )
-MSG_HASH(
-    MENU_ENUM_LABEL_VALUE_QT_SELECT_FILES,
-    "Select Files"
-    )
-MSG_HASH(
-    MENU_ENUM_LABEL_VALUE_QT_SELECT_FOLDER,
-    "Select Folder"
-    )
-MSG_HASH(
-    MENU_ENUM_LABEL_VALUE_QT_FIELD_MULTIPLE,
-    "<multiple>"
-    )
-MSG_HASH(
-    MENU_ENUM_LABEL_VALUE_QT_COULD_NOT_UPDATE_PLAYLIST_ENTRY,
-    "Error updating playlist entry."
-    )
-MSG_HASH(
-    MENU_ENUM_LABEL_VALUE_QT_PLEASE_FILL_OUT_REQUIRED_FIELDS,
-    "Please fill out all required fields."
-    )
-MSG_HASH(
-    MENU_ENUM_LABEL_VALUE_QT_UPDATE_RETROARCH_NIGHTLY,
-    "Update RetroArch (nightly)"
-    )
-MSG_HASH(
-    MENU_ENUM_LABEL_VALUE_QT_UPDATE_RETROARCH_FINISHED,
-    "RetroArch updated successfully. Please restart the application for the changes to take effect."
-    )
-MSG_HASH(
-    MENU_ENUM_LABEL_VALUE_QT_UPDATE_RETROARCH_FAILED,
-    "Update failed."
-    )
-MSG_HASH(
-    MENU_ENUM_LABEL_VALUE_QT_MENU_HELP_ABOUT_CONTRIBUTORS,
-    "Contributors"
-    )
-MSG_HASH(
-    MENU_ENUM_LABEL_VALUE_QT_CURRENT_SHADER,
-    "Current shader"
-    )
-MSG_HASH(
-    MENU_ENUM_LABEL_VALUE_QT_MOVE_DOWN,
-    "Move Down"
-    )
-MSG_HASH(
-    MENU_ENUM_LABEL_VALUE_QT_MOVE_UP,
-    "Move Up"
-    )
-MSG_HASH(
-    MENU_ENUM_LABEL_VALUE_QT_LOAD,
-    "Load"
-    )
-MSG_HASH(
-    MENU_ENUM_LABEL_VALUE_QT_SAVE,
-    "Save"
-    )
-MSG_HASH(
-    MENU_ENUM_LABEL_VALUE_QT_REMOVE,
-    "Remove"
-    )
-MSG_HASH(
-    MENU_ENUM_LABEL_VALUE_QT_APPLY,
-    "Apply"
-    )
-MSG_HASH(
-    MENU_ENUM_LABEL_VALUE_QT_SHADER_ADD_PASS,
-    "Add Pass"
-    )
-MSG_HASH(
-    MENU_ENUM_LABEL_VALUE_QT_SHADER_CLEAR_ALL_PASSES,
-    "Clear All Passes"
-    )
-MSG_HASH(
-    MENU_ENUM_LABEL_VALUE_QT_SHADER_NO_PASSES,
-    "No shader passes."
-    )
-MSG_HASH(
-    MENU_ENUM_LABEL_VALUE_QT_RESET_PASS,
-    "Reset Pass"
-    )
-MSG_HASH(
-    MENU_ENUM_LABEL_VALUE_QT_RESET_ALL_PASSES,
-    "Reset All Passes"
-    )
-MSG_HASH(
-    MENU_ENUM_LABEL_VALUE_QT_RESET_PARAMETER,
-    "Reset Parameter"
-    )
-MSG_HASH(
-    MENU_ENUM_LABEL_VALUE_QT_DOWNLOAD_THUMBNAIL,
-    "Download thumbnail"
-    )
-MSG_HASH(
-    MENU_ENUM_LABEL_VALUE_QT_DOWNLOAD_ALREADY_IN_PROGRESS,
-    "A download is already in progress."
-    )
-MSG_HASH(
-    MENU_ENUM_LABEL_VALUE_QT_MENU_VIEW_OPTIONS_STARTUP_PLAYLIST,
-    "Start on playlist:"
-    )
-MSG_HASH(
-    MENU_ENUM_LABEL_VALUE_QT_DOWNLOAD_ALL_THUMBNAILS,
-    "Download All Thumbnails"
-    )
-MSG_HASH(
-    MENU_ENUM_LABEL_VALUE_QT_DOWNLOAD_ALL_THUMBNAILS_ENTIRE_SYSTEM,
-    "Entire System"
-    )
-MSG_HASH(
-    MENU_ENUM_LABEL_VALUE_QT_DOWNLOAD_ALL_THUMBNAILS_THIS_PLAYLIST,
-    "This Playlist"
-    )
-MSG_HASH(
-    MENU_ENUM_LABEL_VALUE_QT_THUMBNAIL_PACK_DOWNLOADED_SUCCESSFULLY,
-    "Thumbnails downloaded successfully."
-    )
-MSG_HASH(
-    MENU_ENUM_LABEL_VALUE_QT_DOWNLOAD_PLAYLIST_THUMBNAIL_PROGRESS,
-    "Succeeded: %1 Failed: %2"
-    )
-MSG_HASH(
-    MSG_DEVICE_CONFIGURED_IN_PORT,
-    "Configured in port:"
-    )
-MSG_HASH(
-    MENU_ENUM_LABEL_VALUE_QT_CORE_OPTIONS,
-    "Core Options"
-    )
-MSG_HASH(
     MENU_ENUM_LABEL_VALUE_VIDEO_ADAPTIVE_VSYNC,
     "自适应 Vsync 同步"
-    )
-MSG_HASH(
-    MENU_ENUM_SUBLABEL_VIDEO_ADAPTIVE_VSYNC,
-    "V-Sync is enabled until performance falls below the target refresh rate. Can minimize stuttering when performance falls below realtime, and can be more energy efficient."
     )
 MSG_HASH(
     MENU_ENUM_LABEL_VALUE_CRT_SWITCHRES_SETTINGS,
@@ -4611,10 +3754,6 @@ MSG_HASH(
 MSG_HASH(
     MENU_ENUM_SUBLABEL_CRT_SWITCHRES_SETTINGS,
     "在 CRT 显示器上输出原汁原味的低清晰度信号。"
-    )
-MSG_HASH(
-    MENU_ENUM_SUBLABEL_CRT_SWITCH_X_AXIS_CENTERING,
-    "Cycle through these options if the image is not centered properly on the display."
     )
 MSG_HASH(
     MENU_ENUM_LABEL_VALUE_CRT_SWITCH_X_AXIS_CENTERING,
@@ -4630,23 +3769,12 @@ MSG_HASH(
       MENU_ENUM_SUBLABEL_CRT_SWITCH_RESOLUTION_OUTPUT_DISPLAY_ID,
       "选择连接到CRT显示器的输出端口。")
 MSG_HASH(
-      MENU_ENUM_LABEL_VALUE_CRT_SWITCH_RESOLUTION_OUTPUT_DISPLAY_ID,
-      "Output Display ID")
-MSG_HASH(
     MENU_ENUM_LABEL_VALUE_QUICK_MENU_START_RECORDING,
     "开始录制"
     )
 MSG_HASH(
-    MENU_ENUM_SUBLABEL_QUICK_MENU_START_RECORDING,
-    "Starts recording."
-    )
-MSG_HASH(
     MENU_ENUM_LABEL_VALUE_QUICK_MENU_STOP_RECORDING,
     "停止录制"
-    )
-MSG_HASH(
-    MENU_ENUM_SUBLABEL_QUICK_MENU_STOP_RECORDING,
-    "Stops recording."
     )
 MSG_HASH(
     MENU_ENUM_LABEL_VALUE_QUICK_MENU_START_STREAMING,
@@ -4688,14 +3816,6 @@ MSG_HASH(
     MENU_ENUM_LABEL_VALUE_UDP_STREAM_PORT,
     "直播 UDP 端口"
     )
-MSG_HASH(
-    MENU_ENUM_LABEL_VALUE_ACCOUNTS_TWITCH,
-    "Twitch"
-    )
-MSG_HASH(
-    MENU_ENUM_LABEL_VALUE_ACCOUNTS_YOUTUBE,
-    "YouTube"
-    )
 MSG_HASH(MENU_ENUM_LABEL_VALUE_TWITCH_STREAM_KEY,
       "Twitch 直播密钥")
 MSG_HASH(MENU_ENUM_LABEL_VALUE_YOUTUBE_STREAM_KEY,
@@ -4716,10 +3836,6 @@ MSG_HASH(
     MENU_ENUM_SUBLABEL_RESET_TO_DEFAULT_CONFIG,
     "将当前配置文件的所有设置恢复为默认。"
     )
-MSG_HASH(
-    MENU_ENUM_LABEL_VALUE_BASIC_MENU_CONTROLS_OK,
-    "OK"
-    )
 MSG_HASH(MENU_ENUM_LABEL_VALUE_OZONE_MENU_COLOR_THEME,
     "菜单主题颜色")
 MSG_HASH(
@@ -4734,10 +3850,6 @@ MSG_HASH(
     MENU_ENUM_SUBLABEL_OZONE_MENU_COLOR_THEME,
     "选择不同的主题颜色。"
     )
-MSG_HASH(MENU_ENUM_LABEL_VALUE_MENU_USE_PREFERRED_SYSTEM_COLOR_THEME,
-      "Use preferred system color theme")
-MSG_HASH(MENU_ENUM_SUBLABEL_MENU_USE_PREFERRED_SYSTEM_COLOR_THEME,
-      "Use your operating system's color theme (if any) - overrides theme settings.")
 MSG_HASH(MSG_RESAMPLER_QUALITY_LOWEST,
       "最低")
 MSG_HASH(MSG_RESAMPLER_QUALITY_LOWER,
@@ -4764,31 +3876,5 @@ MSG_HASH(
     MENU_ENUM_LABEL_VALUE_NO_FAVORITES_AVAILABLE,
     "没有收藏。"
     )
-MSG_HASH(
-    MSG_MISSING_ASSETS,
-    "Warning: Missing assets, use the Online Updater if available"
-    )
-MSG_HASH(MENU_ENUM_LABEL_VALUE_VIDEO_WINDOW_SAVE_POSITION,
-      "Remember Window Position and Size")
-MSG_HASH(
-    MENU_ENUM_LABEL_VALUE_SYSTEM_INFO_COREAUDIO_SUPPORT,
-    "CoreAudio support"
-    )
-MSG_HASH(
-    MENU_ENUM_LABEL_VALUE_SYSTEM_INFO_COREAUDIO3_SUPPORT,
-    "CoreAudio V3 support"
-    )
-MSG_HASH(MENU_ENUM_LABEL_VALUE_MENU_WIDGETS_ENABLE,
-      "Menu Widgets")
-MSG_HASH(MENU_ENUM_LABEL_VALUE_VIDEO_SHADERS_ENABLE,
-      "Video Shaders")
-MSG_HASH(MENU_ENUM_LABEL_VALUE_SCAN_WITHOUT_CORE_MATCH,
-      "Scan without core match")
-MSG_HASH(MENU_ENUM_SUBLABEL_SCAN_WITHOUT_CORE_MATCH,
-      "When disabled, content is only added to playlists if you have a core installed that supports its extension. By enabling this, it will add to playlist regardless. This way, you can install the core you need later on after scanning.")
-MSG_HASH(MENU_ENUM_LABEL_VALUE_MENU_XMB_ANIMATION_HORIZONTAL_HIGHLIGHT,
-      "Animation Horizontal Icon Highlight")
-MSG_HASH(MENU_ENUM_LABEL_VALUE_MENU_XMB_ANIMATION_MOVE_UP_DOWN,
-      "Animation Move Up/Down")
-MSG_HASH(MENU_ENUM_LABEL_VALUE_MENU_XMB_ANIMATION_OPENING_MAIN_MENU,
-      "Animation Main Menu Opens/Closes")
+MSG_HASH(MENU_ENUM_LABEL_VALUE_DELETE_PLAYLIST,
+      "删除播放列表")

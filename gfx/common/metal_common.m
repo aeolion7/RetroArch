@@ -1,8 +1,17 @@
-/*
- *  metal_common.m
- *  RetroArch_Metal
+/*  RetroArch - A frontend for libretro.
+ *  Copyright (C) 2018-2019 - Stuart Carnie
+ *  Copyright (C) 2011-2017 - Daniel De Matteis
  *
- *  Created by Stuart Carnie on 5/14/18.
+ *  RetroArch is free software: you can redistribute it and/or modify it under the terms
+ *  of the GNU General Public License as published by the Free Software Found-
+ *  ation, either version 3 of the License, or (at your option) any later version.
+ *
+ *  RetroArch is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+ *  without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
+ *  PURPOSE.  See the GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License along with RetroArch.
+ *  If not, see <http://www.gnu.org/licenses/>.
  */
 
 #import <Foundation/Foundation.h>
@@ -22,9 +31,9 @@
 
 #ifdef HAVE_MENU
 #import "../../menu/menu_driver.h"
-#ifdef HAVE_MENU_WIDGETS
-#import "../../menu/widgets/menu_widgets.h"
 #endif
+#ifdef HAVE_GFX_WIDGETS
+#import "../gfx_widgets.h"
 #endif
 
 #define STRUCT_ASSIGN(x, y) \
@@ -38,6 +47,24 @@
    if (__y != nil) \
       x = (__bridge __typeof__(x))(__bridge_retained void *)((NSObject *)__y); \
    }
+
+@implementation MetalView
+
+- (void)keyDown:(NSEvent*)theEvent
+{
+}
+
+/* Stop the annoying sound when pressing a key. */
+- (BOOL)acceptsFirstResponder
+{
+   return YES;
+}
+
+- (BOOL)isFlipped
+{
+   return YES;
+}
+@end
 
 #pragma mark - private categories
 
@@ -83,12 +110,11 @@
    id<MTLSamplerState> _samplerStateNearest;
 
    // other state
-   Uniforms _uniforms;
    Uniforms _viewportMVP;
 }
 
 - (instancetype)initWithVideo:(const video_info_t *)video
-                        input:(const input_driver_t **)input
+                        input:(input_driver_t **)input
                     inputData:(void **)inputData
 {
    if (self = [super init])
@@ -150,7 +176,11 @@
       // overlay view
       _overlay = [[Overlay alloc] initWithContext:_context];
 
-      font_driver_init_osd((__bridge void *)self, false, video->is_threaded, FONT_DRIVER_RENDER_METAL_API);
+      font_driver_init_osd((__bridge void *)self,
+            video,
+            false,
+            video->is_threaded,
+            FONT_DRIVER_RENDER_METAL_API);
    }
    return self;
 }
@@ -235,7 +265,7 @@
 
    _viewport->full_width = width;
    _viewport->full_height = height;
-   video_driver_set_size(&_viewport->full_width, &_viewport->full_height);
+   video_driver_set_size(_viewport->full_width, _viewport->full_height);
    _layer.drawableSize = CGSizeMake(width, height);
    video_driver_update_viewport(_viewport, forceFull, _keepAspect);
 
@@ -270,23 +300,16 @@
          [_frameView updateFrame:data pitch:pitch];
       }
 
-      [self _drawViews:video_info];
+      [self _drawCore:video_info];
+      [self _drawMenu:video_info];
 
-      if (video_info->statistics_show)
-      {
-         struct font_params *osd_params = (struct font_params *)&video_info->osd_stat_params;
-
-         if (osd_params)
-         {
-            font_driver_render_msg(video_info, NULL, video_info->stat_text, osd_params);
-         }
-      }
+      id<MTLRenderCommandEncoder> rce = _context.rce;
 
 #ifdef HAVE_OVERLAY
       if (_overlay.enabled)
       {
-         id<MTLRenderCommandEncoder> rce = _context.rce;
          [rce pushDebugGroup:@"overlay"];
+         [_context resetRenderViewport:_overlay.fullscreen ? kFullscreenViewport : kVideoViewport];
          [rce setRenderPipelineState:[_context getStockShader:VIDEO_SHADER_STOCK_BLEND blend:YES]];
          [rce setVertexBytes:_context.uniforms length:sizeof(*_context.uniforms) atIndex:BufferIndexUniforms];
          [rce setFragmentSamplerState:_samplerStateLinear atIndex:SamplerIndexDraw];
@@ -295,14 +318,33 @@
       }
 #endif
 
-#ifdef HAVE_MENU
-#ifdef HAVE_MENU_WIDGETS
-      menu_widgets_frame(video_info);
-#endif
+      if (video_info->statistics_show)
+      {
+         struct font_params *osd_params = (struct font_params *)&video_info->osd_stat_params;
+
+         if (osd_params)
+         {
+            [rce pushDebugGroup:@"video stats"];
+            font_driver_render_msg(data, video_info, video_info->stat_text, osd_params, NULL);
+            [rce popDebugGroup];
+         }
+      }
+
+#ifdef HAVE_GFX_WIDGETS
+      if (video_info->widgets_inited)
+      {
+         [rce pushDebugGroup:@"menu widgets"];
+         gfx_widgets_frame(video_info);
+         [rce popDebugGroup];
+      }
 #endif
 
       if (msg && *msg)
+      {
+         [rce pushDebugGroup:@"message"];
          [self _renderMessage:msg info:video_info];
+         [rce popDebugGroup];
+      }
 
       [self _endFrame];
    }
@@ -339,11 +381,11 @@
       float g = settings->uints.video_msg_bgcolor_green / 255.0f;
       float b = settings->uints.video_msg_bgcolor_blue / 255.0f;
       float a = settings->floats.video_msg_bgcolor_opacity;
-      [_context resetRenderViewport];
+      [_context resetRenderViewport:kFullscreenViewport];
       [_context drawQuadX:x y:y w:width h:height r:r g:g b:b a:a];
    }
 
-   font_driver_render_msg(video_info, NULL, msg, NULL);
+   font_driver_render_msg(NULL, video_info, msg, NULL, NULL);
 }
 
 - (void)_beginFrame
@@ -357,7 +399,7 @@
    [_context begin];
 }
 
-- (void)_drawViews:(video_frame_info_t *)video_info
+- (void)_drawCore:(video_frame_info_t *)video_info
 {
    id<MTLRenderCommandEncoder> rce = _context.rce;
 
@@ -380,11 +422,20 @@
       [_frameView drawWithEncoder:rce];
    }
    [rce popDebugGroup];
+}
 
-   if (_menu.enabled && _menu.hasFrame)
+- (void)_drawMenu:(video_frame_info_t *)video_info
+{
+   if (!_menu.enabled)
+      return;
+
+   id<MTLRenderCommandEncoder> rce = _context.rce;
+
+   if (_menu.hasFrame)
    {
+      [rce pushDebugGroup:@"menu frame"];
       [_menu.view drawWithContext:_context];
-      [rce setVertexBytes:&_uniforms length:sizeof(_uniforms) atIndex:BufferIndexUniforms];
+      [rce setVertexBytes:_context.uniforms length:sizeof(*_context.uniforms) atIndex:BufferIndexUniforms];
       [rce setRenderPipelineState:_t_pipelineState];
       if (_menu.view.filter == RTextureFilterNearest)
       {
@@ -395,21 +446,13 @@
          [rce setFragmentSamplerState:_samplerStateLinear atIndex:SamplerIndexDraw];
       }
       [_menu.view drawWithEncoder:rce];
+      [rce popDebugGroup];
    }
-
 #if defined(HAVE_MENU)
-   if (_menu.enabled)
+   else
    {
-      MTLViewport viewport = {
-         .originX = 0.0f,
-         .originY = 0.0f,
-         .width = _viewport->full_width,
-         .height = _viewport->full_height,
-         .znear = 0.0f,
-         .zfar = 1.0,
-      };
-      [rce setViewport:viewport];
       [rce pushDebugGroup:@"menu"];
+      [_context resetRenderViewport:kFullscreenViewport];
       menu_driver_frame(video_info);
       [rce popDebugGroup];
    }
@@ -898,6 +941,7 @@ typedef struct MTLALIGN(16)
    }
 
    id<MTLCommandBuffer> cb = ctx.blitCommandBuffer;
+   [cb pushDebugGroup:@"shaders"];
 
    MTLRenderPassDescriptor *rpd = [MTLRenderPassDescriptor new];
    rpd.colorAttachments[0].loadAction = MTLLoadActionDontCare;
@@ -919,11 +963,10 @@ typedef struct MTLALIGN(16)
          rce = [cb renderCommandEncoderWithDescriptor:rpd];
       }
 
-#if DEBUG && METAL_DEBUG
-      rce.label = [NSString stringWithFormat:@"pass %d", i];
-#endif
-
       [rce setRenderPipelineState:_engine.pass[i]._state];
+
+      NSURL *shaderPath = [NSURL fileURLWithPath:_engine.pass[i]._state.label];
+      rce.label = shaderPath.lastPathComponent.stringByDeletingPathExtension;
 
       _engine.pass[i].frame_count = (uint32_t)_frameCount;
       if (_shader->pass[i].frame_count_mod)
@@ -996,6 +1039,8 @@ typedef struct MTLALIGN(16)
       _drawState = ViewDrawStateContext;
    else
       _drawState = ViewDrawStateAll;
+
+   [cb popDebugGroup];
 }
 
 - (void)_updateRenderTargets
@@ -1137,8 +1182,11 @@ typedef struct MTLALIGN(16)
    [self _freeVideoShader:_shader];
    _shader = nil;
 
-   config_file_t         *conf = config_file_new(path.UTF8String);
+   config_file_t         *conf = video_shader_read_preset(path.UTF8String);
    struct video_shader *shader = (struct video_shader *)calloc(1, sizeof(*shader));
+
+   settings_t *settings = config_get_ptr();
+   NSString *shadersPath = [NSString stringWithFormat:@"%s/", settings->paths.directory_video_shader];
 
    @try
    {
@@ -1146,8 +1194,6 @@ typedef struct MTLALIGN(16)
       texture_t *source = NULL;
       if (!video_shader_read_conf_preset(conf, shader))
          return NO;
-
-      video_shader_resolve_relative(shader, path.UTF8String);
 
       source = &_engine.frame.texture[0];
 
@@ -1217,7 +1263,9 @@ typedef struct MTLALIGN(16)
             vd.layouts[4].stepFunction = MTLVertexStepFunctionPerVertex;
 
             MTLRenderPipelineDescriptor *psd = [MTLRenderPipelineDescriptor new];
-            psd.label = [NSString stringWithFormat:@"pass %d", i];
+
+            psd.label = [[NSString stringWithUTF8String:shader->pass[i].source.path]
+                          stringByReplacingOccurrencesOfString:shadersPath withString:@""];
 
             MTLRenderPipelineColorAttachmentDescriptor *ca = psd.colorAttachments[0];
 

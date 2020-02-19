@@ -46,12 +46,137 @@
 
 #ifdef HAVE_MENU
 #include "../../menu/menu_driver.h"
-#ifdef HAVE_MENU_WIDGETS
-#include "../../menu/widgets/menu_widgets.h"
 #endif
+#ifdef HAVE_GFX_WIDGETS
+#include "../gfx_widgets.h"
 #endif
 
 static const struct video_ortho gl_core_default_ortho = {0, 1, 0, 1, -1, 1};
+
+void gl_core_build_default_matrix(float *data)
+{
+   data[0] = 2.0f;
+   data[1] = 0.0f;
+   data[2] = 0.0f;
+   data[3] = 0.0f;
+   data[4] = 0.0f;
+   data[5] = 2.0f;
+   data[6] = 0.0f;
+   data[7] = 0.0f;
+   data[8] = 0.0f;
+   data[9] = 0.0f;
+   data[10] = 2.0f;
+   data[11] = 0.0f;
+   data[12] = -1.0f;
+   data[13] = -1.0f;
+   data[14] = 0.0f;
+   data[15] = 1.0f;
+}
+
+void gl_core_framebuffer_copy(
+      GLuint fb_id,
+      GLuint quad_program,
+      GLuint quad_vbo,
+      GLint flat_ubo_vertex,
+      struct Size2D size,
+      GLuint image)
+{
+   glBindFramebuffer(GL_FRAMEBUFFER, fb_id);
+   glActiveTexture(GL_TEXTURE2);
+   glBindTexture(GL_TEXTURE_2D, image);
+   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+   glViewport(0, 0, size.width, size.height);
+   glClear(GL_COLOR_BUFFER_BIT);
+
+   glUseProgram(quad_program);
+   if (flat_ubo_vertex >= 0)
+   {
+      float mvp[16];
+      gl_core_build_default_matrix(mvp);
+      glUniform4fv(flat_ubo_vertex, 4, mvp);
+   }
+
+   /* Draw quad */
+   glDisable(GL_CULL_FACE);
+   glDisable(GL_BLEND);
+   glDisable(GL_DEPTH_TEST);
+   glEnableVertexAttribArray(0);
+   glEnableVertexAttribArray(1);
+   glBindBuffer(GL_ARRAY_BUFFER, quad_vbo);
+   glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float),
+                         (void *)((uintptr_t)(0)));
+   glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float),
+                         (void *)((uintptr_t)(2 * sizeof(float))));
+   glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+   glBindBuffer(GL_ARRAY_BUFFER, 0);
+   glDisableVertexAttribArray(0);
+   glDisableVertexAttribArray(1);
+
+   glUseProgram(0);
+   glBindTexture(GL_TEXTURE_2D, 0);
+   glBindFramebuffer(GL_FRAMEBUFFER, 0);
+}
+
+void gl_core_framebuffer_copy_partial(
+      GLuint fb_id,
+      GLuint quad_program, 
+      GLint flat_ubo_vertex,
+      struct Size2D size,
+      GLuint image,
+      float rx, float ry)
+{
+   GLuint vbo;
+   const float quad_data[] = {
+      0.0f, 0.0f, 0.0f, 0.0f,
+      1.0f, 0.0f, rx, 0.0f,
+      0.0f, 1.0f, 0.0f, ry,
+      1.0f, 1.0f, rx, ry,
+   };
+
+   glBindFramebuffer(GL_FRAMEBUFFER, fb_id);
+   glActiveTexture(GL_TEXTURE2);
+   glBindTexture(GL_TEXTURE_2D, image);
+   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+   glViewport(0, 0, size.width, size.height);
+   glClear(GL_COLOR_BUFFER_BIT);
+
+   glUseProgram(quad_program);
+   if (flat_ubo_vertex >= 0)
+   {
+      float mvp[16];
+      gl_core_build_default_matrix(mvp);
+      glUniform4fv(flat_ubo_vertex, 4, mvp);
+   }
+   glDisable(GL_CULL_FACE);
+   glDisable(GL_BLEND);
+   glDisable(GL_DEPTH_TEST);
+   glEnableVertexAttribArray(0);
+   glEnableVertexAttribArray(1);
+
+   /* A bit crude, but heeeey. */
+   glGenBuffers(1, &vbo);
+   glBindBuffer(GL_ARRAY_BUFFER, vbo);
+
+   glBufferData(GL_ARRAY_BUFFER, sizeof(quad_data), quad_data, GL_STREAM_DRAW);
+   glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float),
+                         (void *)((uintptr_t)(0)));
+   glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float),
+                         (void *)((uintptr_t)(2 * sizeof(float))));
+   glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+   glBindBuffer(GL_ARRAY_BUFFER, 0);
+   glDeleteBuffers(1, &vbo);
+   glDisableVertexAttribArray(0);
+   glDisableVertexAttribArray(1);
+   glUseProgram(0);
+   glBindTexture(GL_TEXTURE_2D, 0);
+   glBindFramebuffer(GL_FRAMEBUFFER, 0);
+}
 
 static void gl_core_deinit_fences(gl_core_t *gl)
 {
@@ -113,31 +238,6 @@ static void gl_core_deinit_pbo_readback(gl_core_t *gl)
    scaler_ctx_gen_reset(&gl->pbo_readback_scaler);
 }
 
-#ifdef HAVE_OVERLAY
-static void gl_core_free_overlay(gl_core_t *gl)
-{
-   if (gl->overlay_tex)
-      glDeleteTextures(gl->overlays, gl->overlay_tex);
-
-   free(gl->overlay_tex);
-   free(gl->overlay_vertex_coord);
-   free(gl->overlay_tex_coord);
-   free(gl->overlay_color_coord);
-   gl->overlay_tex          = NULL;
-   gl->overlay_vertex_coord = NULL;
-   gl->overlay_tex_coord    = NULL;
-   gl->overlay_color_coord  = NULL;
-   gl->overlays             = 0;
-}
-
-static void gl_core_free_scratch_vbos(gl_core_t *gl)
-{
-   unsigned i;
-   for (i = 0; i < GL_CORE_NUM_VBOS; i++)
-      if (gl->scratch_vbos[i])
-         glDeleteBuffers(1, &gl->scratch_vbos[i]);
-}
-
 static void gl_core_slow_readback(gl_core_t *gl, void *buffer)
 {
    glPixelStorei(GL_PACK_ALIGNMENT, 4);
@@ -196,6 +296,92 @@ static void gl_core_fence_iterate(gl_core_t *gl, unsigned hard_sync_frames)
    }
 }
 
+uint32_t gl_core_get_cross_compiler_target_version(void)
+{
+   const char *version = (const char*)glGetString(GL_VERSION);
+   unsigned major = 0;
+   unsigned minor = 0;
+
+#ifdef HAVE_OPENGLES3
+   if (!version || sscanf(version, "OpenGL ES %u.%u", &major, &minor) != 2)
+      return 300;
+   
+   if (major == 2 && minor == 0)
+      return 100;
+#else
+   if (!version || sscanf(version, "%u.%u", &major, &minor) != 2)
+      return 150;
+
+   if (major == 3)
+   {
+      switch (minor)
+      {
+         case 2:
+            return 150;
+         case 1:
+            return 140;
+         case 0:
+            return 130;
+      }
+   }
+   else if (major == 2)
+   {
+      switch (minor)
+      {
+         case 1:
+            return 120;
+         case 0:
+            return 110;
+      }
+   }
+#endif
+
+   return 100 * major + 10 * minor;
+}
+
+GLuint gl_core_compile_shader(GLenum stage, const char *source)
+{
+   GLint status;
+   GLuint shader   = glCreateShader(stage);
+   const char *ptr = source;
+
+   glShaderSource(shader, 1, &ptr, NULL);
+   glCompileShader(shader);
+
+   glGetShaderiv(shader, GL_COMPILE_STATUS, &status);
+
+   if (!status)
+   {
+      GLint length;
+      glGetShaderiv(shader, GL_INFO_LOG_LENGTH, &length);
+      if (length > 0)
+      {
+         char *info_log = (char*)malloc(length);
+
+         if (info_log)
+         {
+            glGetShaderInfoLog(shader, length, &length, info_log);
+            RARCH_ERR("[GLCore]: Failed to compile shader: %s\n", info_log);
+            free(info_log);
+            glDeleteShader(shader);
+            return 0;
+         }
+      }
+   }
+
+   return shader;
+}
+
+
+void gl_core_framebuffer_clear(GLuint id)
+{
+   glBindFramebuffer(GL_FRAMEBUFFER, id);
+   glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+   glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
+   glClear(GL_COLOR_BUFFER_BIT);
+   glBindFramebuffer(GL_FRAMEBUFFER, 0);
+}
+
 void gl_core_bind_scratch_vbo(gl_core_t *gl, const void *data, size_t size)
 {
    if (!gl->scratch_vbos[gl->scratch_vbo_index])
@@ -205,6 +391,31 @@ void gl_core_bind_scratch_vbo(gl_core_t *gl, const void *data, size_t size)
    gl->scratch_vbo_index++;
    if (gl->scratch_vbo_index >= GL_CORE_NUM_VBOS)
       gl->scratch_vbo_index = 0;
+}
+
+#ifdef HAVE_OVERLAY
+static void gl_core_free_overlay(gl_core_t *gl)
+{
+   if (gl->overlay_tex)
+      glDeleteTextures(gl->overlays, gl->overlay_tex);
+
+   free(gl->overlay_tex);
+   free(gl->overlay_vertex_coord);
+   free(gl->overlay_tex_coord);
+   free(gl->overlay_color_coord);
+   gl->overlay_tex          = NULL;
+   gl->overlay_vertex_coord = NULL;
+   gl->overlay_tex_coord    = NULL;
+   gl->overlay_color_coord  = NULL;
+   gl->overlays             = 0;
+}
+
+static void gl_core_free_scratch_vbos(gl_core_t *gl)
+{
+   unsigned i;
+   for (i = 0; i < GL_CORE_NUM_VBOS; i++)
+      if (gl->scratch_vbos[i])
+         glDeleteBuffers(1, &gl->scratch_vbos[i]);
 }
 
 static void gl_core_overlay_vertex_geom(void *data,
@@ -312,11 +523,9 @@ static void gl_core_render_overlay(gl_core_t *gl, video_frame_info_t *video_info
 }
 #endif
 
-static void gl_core_context_bind_hw_render(gl_core_t *gl, bool enable)
-{
-   if (gl->use_shared_context && gl->ctx_driver->bind_hw_render)
-      gl->ctx_driver->bind_hw_render(gl->ctx_data, enable);
-}
+#define gl_core_context_bind_hw_render(gl, enable) \
+   if (gl->use_shared_context) \
+      gl->ctx_driver->bind_hw_render(gl->ctx_data, enable)
 
 static void gl_core_deinit_hw_render(gl_core_t *gl)
 {
@@ -377,8 +586,10 @@ static void gl_core_destroy_resources(gl_core_t *gl)
    if (gl->pipelines.bokeh)
       glDeleteProgram(gl->pipelines.bokeh);
 
+#ifdef HAVE_OVERLAY
    gl_core_free_overlay(gl);
    gl_core_free_scratch_vbos(gl);
+#endif
    gl_core_deinit_fences(gl);
    gl_core_deinit_pbo_readback(gl);
    gl_core_deinit_hw_render(gl);
@@ -520,7 +731,7 @@ static const gfx_ctx_driver_t *gl_core_get_context(gl_core_t *gl)
 }
 
 static void gl_core_set_projection(gl_core_t *gl,
-                                   const struct video_ortho *ortho, bool allow_rotate)
+      const struct video_ortho *ortho, bool allow_rotate)
 {
    math_matrix_4x4 rot;
 
@@ -551,18 +762,16 @@ static void gl_core_set_projection(gl_core_t *gl,
 }
 
 static void gl_core_set_viewport(gl_core_t *gl,
-                                 unsigned viewport_width,
-                                 unsigned viewport_height,
-                                 bool force_full, bool allow_rotate)
+      video_frame_info_t *video_info,
+      unsigned viewport_width,
+      unsigned viewport_height,
+      bool force_full, bool allow_rotate)
 {
    gfx_ctx_aspect_t aspect_data;
-   unsigned width, height;
    int x                    = 0;
    int y                    = 0;
    float device_aspect      = (float)viewport_width / viewport_height;
-   settings_t *settings     = config_get_ptr();
-
-   video_driver_get_size(&width, &height);
+   unsigned height          = video_info->height;
 
    aspect_data.aspect       = &device_aspect;
    aspect_data.width        = viewport_width;
@@ -570,11 +779,11 @@ static void gl_core_set_viewport(gl_core_t *gl,
 
    video_context_driver_translate_aspect(&aspect_data);
 
-   if (settings->bools.video_scale_integer && !force_full)
+   if (video_info->scale_integer && !force_full)
    {
       video_viewport_get_scaled_integer(&gl->vp,
-                                        viewport_width, viewport_height,
-                                        video_driver_get_aspect_ratio(), gl->keep_aspect);
+            viewport_width, viewport_height,
+            video_driver_get_aspect_ratio(), gl->keep_aspect);
       viewport_width  = gl->vp.width;
       viewport_height = gl->vp.height;
    }
@@ -583,7 +792,7 @@ static void gl_core_set_viewport(gl_core_t *gl,
       float desired_aspect = video_driver_get_aspect_ratio();
 
 #if defined(HAVE_MENU)
-      if (settings->uints.video_aspect_ratio_idx == ASPECT_RATIO_CUSTOM)
+      if (video_info->aspect_ratio_idx == ASPECT_RATIO_CUSTOM)
       {
          const struct video_viewport *custom = video_viewport_get_custom();
          /* GL has bottom-left origin viewport. */
@@ -930,13 +1139,28 @@ static void gl_core_begin_debug(gl_core_t *gl)
 }
 #endif
 
+static void gl_core_set_viewport_wrapper(void *data,
+      unsigned viewport_width,
+      unsigned viewport_height, bool force_full, bool allow_rotate)
+{
+   video_frame_info_t video_info;
+   gl_core_t *gl = (gl_core_t*)data;
+
+   video_driver_build_info(&video_info);
+
+   gl_core_set_viewport(gl, &video_info,
+         viewport_width, viewport_height, force_full, allow_rotate);
+}
+
+
 static void *gl_core_init(const video_info_t *video,
-      const input_driver_t **input, void **input_data)
+      input_driver_t **input, void **input_data)
 {
    gfx_ctx_mode_t mode;
    gfx_ctx_input_t inp;
    unsigned full_x, full_y;
    settings_t *settings                 = config_get_ptr();
+   bool video_gpu_record                = settings->bools.video_gpu_record;
    int interval                         = 0;
    unsigned win_width                   = 0;
    unsigned win_height                  = 0;
@@ -973,7 +1197,14 @@ static void *gl_core_init(const video_info_t *video,
    if (video->vsync)
       interval = video->swap_interval;
 
-   video_context_driver_swap_interval(&interval);
+   if (gl->ctx_driver->swap_interval)
+   {
+      bool adaptive_vsync_enabled            = video_driver_test_all_flags(
+            GFX_CTX_FLAGS_ADAPTIVE_VSYNC) && video->adaptive_vsync;
+      if (adaptive_vsync_enabled && interval == 1)
+         interval = -1;
+      gl->ctx_driver->swap_interval(gl->ctx_data, interval);
+   }
 
    win_width   = video->width;
    win_height  = video->height;
@@ -1046,9 +1277,9 @@ static void *gl_core_init(const video_info_t *video,
    if (string_is_equal(vendor, "Microsoft Corporation"))
       if (string_is_equal(renderer, "GDI Generic"))
 #ifdef HAVE_OPENGL1
-         rarch_force_video_driver_fallback("gl1");
+         retroarch_force_video_driver_fallback("gl1");
 #else
-         rarch_force_video_driver_fallback("gdi");
+         retroarch_force_video_driver_fallback("gdi");
 #endif
 #endif
 
@@ -1069,14 +1300,16 @@ static void *gl_core_init(const video_info_t *video,
    /* Get real known video size, which might have been altered by context. */
 
    if (temp_width != 0 && temp_height != 0)
-      video_driver_set_size(&temp_width, &temp_height);
+      video_driver_set_size(temp_width, temp_height);
    video_driver_get_size(&temp_width, &temp_height);
+   gl->video_width  = temp_width;
+   gl->video_height = temp_height;
 
    RARCH_LOG("[GLCore]: Using resolution %ux%u\n", temp_width, temp_height);
 
    /* Set the viewport to fix recording, since it needs to know
     * the viewport sizes before we start running. */
-   gl_core_set_viewport(gl, temp_width, temp_height, false, true);
+   gl_core_set_viewport_wrapper(gl, temp_width, temp_height, false, true);
 
    inp.input      = input;
    inp.input_data = input_data;
@@ -1090,13 +1323,14 @@ static void *gl_core_init(const video_info_t *video,
 
    if (video->font_enable)
    {
-      font_driver_init_osd(gl, false,
-                           video->is_threaded,
-                           FONT_DRIVER_RENDER_OPENGL_CORE_API);
+      font_driver_init_osd(gl,
+            video,
+            false,
+            video->is_threaded,
+            FONT_DRIVER_RENDER_OPENGL_CORE_API);
    }
 
-   gl->pbo_readback_enable = settings->bools.video_gpu_record
-      && recording_is_enabled();
+   gl->pbo_readback_enable = video_gpu_record && recording_is_enabled();
 
    if (gl->pbo_readback_enable && gl_core_init_pbo_readback(gl))
    {
@@ -1256,8 +1490,8 @@ static void gl_core_overlay_enable(void *data, bool state)
 
    gl->overlay_enable = state;
 
-   if (gl->fullscreen)
-      video_context_driver_show_mouse(&state);
+   if (gl->fullscreen && gl->ctx_driver->show_mouse)
+      gl->ctx_driver->show_mouse(gl->ctx_data, state);
 }
 
 static void gl_core_overlay_full_screen(void *data, bool enable)
@@ -1313,19 +1547,16 @@ static void gl_core_free(void *data)
 
 static bool gl_core_alive(void *data)
 {
-   unsigned temp_width  = 0;
-   unsigned temp_height = 0;
    bool ret             = false;
    bool quit            = false;
    bool resize          = false;
    gl_core_t *gl        = (gl_core_t*)data;
    bool is_shutdown     = rarch_ctl(RARCH_CTL_IS_SHUTDOWN, NULL);
-
-   /* Needed because some context drivers don't track their sizes */
-   video_driver_get_size(&temp_width, &temp_height);
+   unsigned temp_width  = gl->video_width;
+   unsigned temp_height = gl->video_height;
 
    gl->ctx_driver->check_window(gl->ctx_data,
-                                &quit, &resize, &temp_width, &temp_height, is_shutdown);
+         &quit, &resize, &temp_width, &temp_height, is_shutdown);
 
    if (quit)
       gl->quitting = true;
@@ -1335,16 +1566,21 @@ static bool gl_core_alive(void *data)
    ret = !gl->quitting;
 
    if (temp_width != 0 && temp_height != 0)
-      video_driver_set_size(&temp_width, &temp_height);
+   {
+      video_driver_set_size(temp_width, temp_height);
+      gl->video_width  = temp_width;
+      gl->video_height = temp_height;
+   }
 
    return ret;
 }
 
-static void gl_core_set_nonblock_state(void *data, bool state)
+static void gl_core_set_nonblock_state(void *data, bool state,
+      bool adaptive_vsync_enabled,
+      unsigned swap_interval)
 {
    int interval                = 0;
    gl_core_t         *gl       = (gl_core_t*)data;
-   settings_t        *settings = config_get_ptr();
 
    if (!gl)
       return;
@@ -1353,16 +1589,25 @@ static void gl_core_set_nonblock_state(void *data, bool state)
 
    gl_core_context_bind_hw_render(gl, false);
    if (!state)
-      interval = settings->uints.video_swap_interval;
+      interval = swap_interval;
 
-   video_context_driver_swap_interval(&interval);
+   if (gl->ctx_driver->swap_interval)
+   {
+      if (adaptive_vsync_enabled && interval == 1)
+         interval = -1;
+      gl->ctx_driver->swap_interval(gl->ctx_data, interval);
+   }
+
    gl_core_context_bind_hw_render(gl, true);
 }
 
 static bool gl_core_suppress_screensaver(void *data, bool enable)
 {
-   bool enabled = enable;
-   return video_context_driver_suppress_screensaver(&enabled);
+   bool enabled                = enable;
+   gl_core_t         *gl       = (gl_core_t*)data;
+   if (gl->ctx_data && gl->ctx_driver->suppress_screensaver)
+      return gl->ctx_driver->suppress_screensaver(gl->ctx_data, enabled);
+   return false;
 }
 
 static bool gl_core_set_shader(void *data,
@@ -1403,13 +1648,6 @@ static bool gl_core_set_shader(void *data,
    return true;
 }
 
-static void gl_core_set_viewport_wrapper(void *data, unsigned viewport_width,
-                                         unsigned viewport_height, bool force_full, bool allow_rotate)
-{
-   gl_core_t *gl = (gl_core_t*)data;
-   gl_core_set_viewport(gl, viewport_width, viewport_height, force_full, allow_rotate);
-}
-
 static void gl_core_set_rotation(void *data, unsigned rotation)
 {
    gl_core_t *gl = (gl_core_t*)data;
@@ -1423,11 +1661,11 @@ static void gl_core_set_rotation(void *data, unsigned rotation)
 
 static void gl_core_viewport_info(void *data, struct video_viewport *vp)
 {
-   unsigned width, height;
    unsigned top_y, top_dist;
-   gl_core_t *gl = (gl_core_t*)data;
+   gl_core_t *gl   = (gl_core_t*)data;
+   unsigned width  = gl->video_width;
+   unsigned height = gl->video_height;
 
-   video_driver_get_size(&width, &height);
 
    *vp             = gl->vp;
    vp->full_width  = width;
@@ -1566,6 +1804,8 @@ static void gl_core_draw_menu_texture(gl_core_t *gl, video_frame_info_t *video_i
 
    if (gl->menu_texture_full_screen)
       glViewport(0, 0, video_info->width, video_info->height);
+   else
+      glViewport(gl->vp.x, gl->vp.y, gl->vp.width, gl->vp.height);
 
    glActiveTexture(GL_TEXTURE0 + 1);
    glBindTexture(GL_TEXTURE_2D, gl->menu_texture);
@@ -1592,10 +1832,10 @@ static void gl_core_draw_menu_texture(gl_core_t *gl, video_frame_info_t *video_i
 #endif
 
 static bool gl_core_frame(void *data, const void *frame,
-                          unsigned frame_width, unsigned frame_height,
-                          uint64_t frame_count,
-                          unsigned pitch, const char *msg,
-                          video_frame_info_t *video_info)
+      unsigned frame_width, unsigned frame_height,
+      uint64_t frame_count,
+      unsigned pitch, const char *msg,
+      video_frame_info_t *video_info)
 {
    struct gl_core_filter_chain_texture texture;
    struct gl_core_streamed_texture *streamed;
@@ -1627,17 +1867,19 @@ static bool gl_core_frame(void *data, const void *frame,
       gl->should_resize = false;
    }
 
-   gl_core_set_viewport(gl, video_info->width, video_info->height, false, true);
+   gl_core_set_viewport(gl, video_info, video_info->width, video_info->height, false, true);
 
-   memset(&texture, 0, sizeof(texture));
-
-   texture.width = streamed->width;
-   texture.height = streamed->height;
+   texture.image            = 0;
+   texture.width            = streamed->width;
+   texture.height           = streamed->height;
+   texture.padded_width     = 0;
+   texture.padded_height    = 0;
+   texture.format           = 0;
    if (gl->hw_render_enable)
    {
-      texture.image = gl->hw_render_texture;
-      texture.format = GL_RGBA8;
-      texture.padded_width = gl->hw_render_max_width;
+      texture.image         = gl->hw_render_texture;
+      texture.format        = GL_RGBA8;
+      texture.padded_width  = gl->hw_render_max_width;
       texture.padded_height = gl->hw_render_max_height;
 
 	  if (texture.width == 0)
@@ -1647,9 +1889,9 @@ static bool gl_core_frame(void *data, const void *frame,
    }
    else
    {
-      texture.image = streamed->tex;
-      texture.format = gl->video_info.rgb32 ? GL_RGBA8 : GL_RGB565;
-      texture.padded_width = streamed->width;
+      texture.image         = streamed->tex;
+      texture.format        = gl->video_info.rgb32 ? GL_RGBA8 : GL_RGB565;
+      texture.padded_width  = streamed->width;
       texture.padded_height = streamed->height;
    }
    gl_core_filter_chain_set_frame_count(gl->filter_chain, frame_count);
@@ -1677,20 +1919,19 @@ static bool gl_core_frame(void *data, const void *frame,
          &video_info->osd_stat_params;
 
       if (osd_params)
-      {
-         font_driver_render_msg(video_info, NULL, video_info->stat_text,
-               (const struct font_params*)&video_info->osd_stat_params);
-      }
+         font_driver_render_msg(gl, video_info, video_info->stat_text,
+               (const struct font_params*)&video_info->osd_stat_params, NULL);
    }
-
-#ifdef HAVE_MENU_WIDGETS
-   menu_widgets_frame(video_info);
-#endif
 #endif
 
 #ifdef HAVE_OVERLAY
    if (gl->overlay_enable)
       gl_core_render_overlay(gl, video_info);
+#endif
+
+#ifdef HAVE_GFX_WIDGETS
+   if (video_info->widgets_inited)
+      gfx_widgets_frame(video_info);
 #endif
 
    if (!string_is_empty(msg))
@@ -1699,7 +1940,7 @@ static bool gl_core_frame(void *data, const void *frame,
       if (video_info->msg_bgcolor_enable)
          gl_core_render_osd_background(gl, video_info, msg);
 #endif
-      font_driver_render_msg(video_info, NULL, msg, NULL);
+      font_driver_render_msg(gl, video_info, msg, NULL, NULL);
    }
 
    video_info->cb_update_window_title(
@@ -1769,31 +2010,10 @@ static void gl_core_set_aspect_ratio(void *data, unsigned aspect_ratio_idx)
 {
    gl_core_t *gl = (gl_core_t*)data;
 
-   switch (aspect_ratio_idx)
-   {
-      case ASPECT_RATIO_SQUARE:
-         video_driver_set_viewport_square_pixel();
-         break;
-
-      case ASPECT_RATIO_CORE:
-         video_driver_set_viewport_core();
-         break;
-
-      case ASPECT_RATIO_CONFIG:
-         video_driver_set_viewport_config();
-         break;
-
-      default:
-         break;
-   }
-
-   video_driver_set_aspect_ratio_value(
-         aspectratio_lut[aspect_ratio_idx].value);
-
    if (!gl)
       return;
 
-   gl->keep_aspect = true;
+   gl->keep_aspect   = true;
    gl->should_resize = true;
 }
 
@@ -1838,7 +2058,7 @@ static int video_texture_load_wrap_gl_core(void *data)
 #endif
 
 static uintptr_t gl_core_load_texture(void *video_data, void *data,
-                                      bool threaded, enum texture_filter_type filter_type)
+      bool threaded, enum texture_filter_type filter_type)
 {
    uintptr_t id = 0;
 
@@ -1888,42 +2108,39 @@ static void gl_core_set_video_mode(void *data, unsigned width, unsigned height,
 
 static void gl_core_show_mouse(void *data, bool state)
 {
-   video_context_driver_show_mouse(&state);
-}
+   gl_core_t                            *gl = (gl_core_t*)data;
 
-static void gl_core_set_osd_msg(void *data,
-                                video_frame_info_t *video_info,
-                                const char *msg,
-                                const void *params, void *font)
-{
-   font_driver_render_msg(video_info, font, msg, (const struct font_params *)params);
+   if (gl && gl->ctx_driver->show_mouse)
+      gl->ctx_driver->show_mouse(gl->ctx_data, state);
 }
 
 static void gl_core_set_texture_frame(void *data,
       const void *frame, bool rgb32, unsigned width, unsigned height,
       float alpha)
 {
-   GLenum menu_filter;
    settings_t *settings = config_get_ptr();
+   GLenum menu_filter   = settings->bools.menu_linear_filter 
+      ? GL_LINEAR : GL_NEAREST;
    unsigned base_size   = rgb32 ? sizeof(uint32_t) : sizeof(uint16_t);
    gl_core_t *gl        = (gl_core_t*)data;
    if (!gl)
       return;
 
    gl_core_context_bind_hw_render(gl, false);
-   menu_filter = settings->bools.menu_linear_filter ? GL_LINEAR : GL_NEAREST;
 
    if (gl->menu_texture)
       glDeleteTextures(1, &gl->menu_texture);
    glGenTextures(1, &gl->menu_texture);
    glBindTexture(GL_TEXTURE_2D, gl->menu_texture);
-   glTexStorage2D(GL_TEXTURE_2D, 1, rgb32 ? GL_RGBA8 : GL_RGBA4, width, height);
+   glTexStorage2D(GL_TEXTURE_2D, 1, rgb32 
+         ? GL_RGBA8 : GL_RGBA4, width, height);
 
    glPixelStorei(GL_UNPACK_ALIGNMENT, base_size);
    glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
    glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0,
-                   width, height, GL_RGBA, rgb32 ? GL_UNSIGNED_BYTE : GL_UNSIGNED_SHORT_4_4_4_4, frame);
+                   width, height, GL_RGBA, rgb32 
+                   ? GL_UNSIGNED_BYTE : GL_UNSIGNED_SHORT_4_4_4_4, frame);
    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, menu_filter);
@@ -1978,13 +2195,14 @@ static uintptr_t gl_core_get_current_framebuffer(void *data)
    return gl->hw_render_fbo;
 }
 
-static retro_proc_address_t gl_core_get_proc_address(void *data, const char *sym)
+static retro_proc_address_t gl_core_get_proc_address(
+      void *data, const char *sym)
 {
-   gfx_ctx_proc_address_t proc_address;
-   proc_address.addr = NULL;
-   proc_address.sym  = sym;
-   video_context_driver_get_proc_address(&proc_address);
-   return proc_address.addr;
+   gl_core_t *gl = (gl_core_t*)data;
+   if (gl && gl->ctx_driver->get_proc_address)
+      return gl->ctx_driver->get_proc_address(sym);
+
+   return NULL;
 }
 
 static const video_poke_interface_t gl_core_poke_interface = {
@@ -2003,7 +2221,7 @@ static const video_poke_interface_t gl_core_poke_interface = {
    gl_core_apply_state_changes,
    gl_core_set_texture_frame,
    gl_core_set_texture_enable,
-   gl_core_set_osd_msg,
+   font_driver_render_msg,
    gl_core_show_mouse,
    NULL,                               /* grab_mouse_toggle */
    gl_core_get_current_shader,
@@ -2018,8 +2236,8 @@ static void gl_core_get_poke_interface(void *data,
    *iface = &gl_core_poke_interface;
 }
 
-#if defined(HAVE_MENU) && defined(HAVE_MENU_WIDGETS)
-static bool gl_core_menu_widgets_enabled(void *data)
+#ifdef HAVE_GFX_WIDGETS
+static bool gl_core_gfx_widgets_enabled(void *data)
 {
    (void)data;
    return true;
@@ -2085,7 +2303,7 @@ video_driver_t video_gl_core = {
 #endif
    gl_core_get_poke_interface,
    gl_core_wrap_type_to_enum,
-#if defined(HAVE_MENU) && defined(HAVE_MENU_WIDGETS)
-   gl_core_menu_widgets_enabled
+#ifdef HAVE_GFX_WIDGETS
+   gl_core_gfx_widgets_enabled
 #endif
 };

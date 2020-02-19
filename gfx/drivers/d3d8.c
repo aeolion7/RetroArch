@@ -660,9 +660,10 @@ static void d3d8_make_d3dpp(void *data,
 
    if (info->vsync)
    {
-      settings_t *settings        = config_get_ptr();
+      settings_t *settings         = config_get_ptr();
+      unsigned video_swap_interval = settings->uints.video_swap_interval;
 
-      switch (settings->uints.video_swap_interval)
+      switch (video_swap_interval)
       {
          default:
          case 1:
@@ -699,7 +700,7 @@ static void d3d8_make_d3dpp(void *data,
       unsigned height             = 0;
 
       d3d8_get_video_size(d3d, &width, &height);
-      video_driver_set_size(&width, &height);
+      video_driver_set_size(width, height);
 #endif
       video_driver_get_size(&d3dpp->BackBufferWidth,
             &d3dpp->BackBufferHeight);
@@ -787,16 +788,18 @@ static void d3d8_calculate_rect(void *data,
       bool force_full,
       bool allow_rotate)
 {
-   float device_aspect  = (float)*width / *height;
-   d3d8_video_t *d3d     = (d3d8_video_t*)data;
-   settings_t *settings = config_get_ptr();
+   float device_aspect       = (float)*width / *height;
+   d3d8_video_t *d3d         = (d3d8_video_t*)data;
+   settings_t *settings      = config_get_ptr();
+   bool video_scale_integer  = settings->bools.video_scale_integer;
+   unsigned aspect_ratio_idx = settings->uints.video_aspect_ratio_idx;
 
    video_driver_get_size(width, height);
 
    *x                   = 0;
    *y                   = 0;
 
-   if (settings->bools.video_scale_integer && !force_full)
+   if (video_scale_integer && !force_full)
    {
       struct video_viewport vp;
 
@@ -823,7 +826,7 @@ static void d3d8_calculate_rect(void *data,
       float desired_aspect = video_driver_get_aspect_ratio();
 
 #if defined(HAVE_MENU)
-      if (settings->uints.video_aspect_ratio_idx == ASPECT_RATIO_CUSTOM)
+      if (aspect_ratio_idx == ASPECT_RATIO_CUSTOM)
       {
          video_viewport_t *custom = video_viewport_get_custom();
 
@@ -948,7 +951,8 @@ static bool d3d8_initialize(d3d8_video_t *d3d, const video_info_t *info)
    d3d8_set_viewport(d3d,
 	   width, height, false, true);
 
-   font_driver_init_osd(d3d, false,
+   font_driver_init_osd(d3d, info,
+         false,
          info->is_threaded,
          FONT_DRIVER_RENDER_D3D8_API);
 
@@ -992,7 +996,9 @@ static bool d3d8_restore(void *data)
    return true;
 }
 
-static void d3d8_set_nonblock_state(void *data, bool state)
+static void d3d8_set_nonblock_state(void *data, bool state,
+      bool adaptive_vsync_enabled,
+      unsigned swap_interval)
 {
    int      interval            = 0;
    d3d8_video_t            *d3d = (d3d8_video_t*)data;
@@ -1026,7 +1032,7 @@ static bool d3d8_set_resize(d3d8_video_t *d3d,
    RARCH_LOG("[D3D8]: Resize %ux%u.\n", new_width, new_height);
    d3d->video_info.width  = new_width;
    d3d->video_info.height = new_height;
-   video_driver_set_size(&new_width, &new_height);
+   video_driver_set_size(new_width, new_height);
 
    return true;
 }
@@ -1060,7 +1066,7 @@ static bool d3d8_alive(void *data)
    ret = !quit;
 
    if (temp_width != 0 && temp_height != 0)
-      video_driver_set_size(&temp_width, &temp_height);
+      video_driver_set_size(temp_width, temp_height);
 
    return ret;
 }
@@ -1077,27 +1083,6 @@ static bool d3d8_suppress_screensaver(void *data, bool enable)
 static void d3d8_set_aspect_ratio(void *data, unsigned aspect_ratio_idx)
 {
    d3d8_video_t *d3d = (d3d8_video_t*)data;
-
-   switch (aspect_ratio_idx)
-   {
-      case ASPECT_RATIO_SQUARE:
-         video_driver_set_viewport_square_pixel();
-         break;
-
-      case ASPECT_RATIO_CORE:
-         video_driver_set_viewport_core();
-         break;
-
-      case ASPECT_RATIO_CONFIG:
-         video_driver_set_viewport_config();
-         break;
-
-      default:
-         break;
-   }
-
-   video_driver_set_aspect_ratio_value(
-         aspectratio_lut[aspect_ratio_idx].value);
 
    if (!d3d)
       return;
@@ -1121,12 +1106,12 @@ static void d3d8_set_osd_msg(void *data,
    d3d8_video_t          *d3d = (d3d8_video_t*)data;
 
    d3d8_begin_scene(d3d->dev);
-   font_driver_render_msg(video_info, font, msg, params);
+   font_driver_render_msg(d3d, video_info, msg, params, font);
    d3d8_end_scene(d3d->dev);
 }
 
 static bool d3d8_init_internal(d3d8_video_t *d3d,
-      const video_info_t *info, const input_driver_t **input,
+      const video_info_t *info, input_driver_t **input,
       void **input_data)
 {
 #ifdef HAVE_MONITOR
@@ -1173,11 +1158,11 @@ static bool d3d8_init_internal(d3d8_video_t *d3d,
    g_win32_resize_width  = info->width;
    g_win32_resize_height = info->height;
 
-   windowed_full   = settings->bools.video_windowed_fullscreen;
+   windowed_full         = settings->bools.video_windowed_fullscreen;
 
-   full_x          = (windowed_full || info->width  == 0) ?
+   full_x                = (windowed_full || info->width  == 0) ?
       (mon_rect.right  - mon_rect.left) : info->width;
-   full_y          = (windowed_full || info->height == 0) ?
+   full_y                = (windowed_full || info->height == 0) ?
       (mon_rect.bottom - mon_rect.top)  : info->height;
 
    RARCH_LOG("[D3D8]: Monitor size: %dx%d.\n",
@@ -1189,7 +1174,7 @@ static bool d3d8_init_internal(d3d8_video_t *d3d,
    {
       unsigned new_width  = info->fullscreen ? full_x : info->width;
       unsigned new_height = info->fullscreen ? full_y : info->height;
-      video_driver_set_size(&new_width, &new_height);
+      video_driver_set_size(new_width, new_height);
    }
 
 #ifdef HAVE_WINDOW
@@ -1229,15 +1214,8 @@ static void d3d8_set_rotation(void *data, unsigned rot)
    d3d->should_resize = true;
 }
 
-static void d3d8_show_mouse(void *data, bool state)
-{
-#ifndef _XBOX
-   win32_show_cursor(state);
-#endif
-}
-
 static void *d3d8_init(const video_info_t *info,
-      const input_driver_t **input, void **input_data)
+      input_driver_t **input, void **input_data)
 {
    d3d8_video_t *d3d = (d3d8_video_t*)calloc(1, sizeof(*d3d));
 
@@ -1443,7 +1421,9 @@ static void d3d8_overlay_enable(void *data, bool state)
    for (i = 0; i < d3d->overlays_size; i++)
       d3d->overlays_enabled = state;
 
-   d3d8_show_mouse(d3d, state);
+#ifndef _XBOX
+   win32_show_cursor(d3d, state);
+#endif
 }
 
 static void d3d8_overlay_full_screen(void *data, bool enable)
@@ -1481,28 +1461,9 @@ static void d3d8_get_overlay_interface(void *data,
 
 static void d3d8_update_title(video_frame_info_t *video_info)
 {
-   const settings_t *settings = config_get_ptr();
 #ifndef _XBOX
    const ui_window_t *window      = ui_companion_driver_get_window_ptr();
-#endif
 
-   if (settings->bools.video_memory_show)
-   {
-#ifndef __WINRT__
-      uint64_t mem_bytes_used = frontend_driver_get_used_memory();
-      uint64_t mem_bytes_total = frontend_driver_get_total_memory();
-      char         mem[128];
-
-      mem[0] = '\0';
-
-      snprintf(
-            mem, sizeof(mem), " || MEM: %.2f/%.2fMB", mem_bytes_used / (1024.0f * 1024.0f),
-            mem_bytes_total / (1024.0f * 1024.0f));
-      strlcat(video_info->fps_text, mem, sizeof(video_info->fps_text));
-#endif
-   }
-
-#ifndef _XBOX
    if (window)
    {
       char title[128];
@@ -1601,10 +1562,8 @@ static bool d3d8_frame(void *data, const void *frame,
          &video_info->osd_stat_params;
 
       if (osd_params)
-      {
-         font_driver_render_msg(video_info, NULL, video_info->stat_text,
-               (const struct font_params*)&video_info->osd_stat_params);
-      }
+         font_driver_render_msg(d3d, video_info, video_info->stat_text,
+               (const struct font_params*)&video_info->osd_stat_params, NULL);
    }
 #endif
 
@@ -1621,7 +1580,7 @@ static bool d3d8_frame(void *data, const void *frame,
    {
       d3d8_set_viewports(d3d->dev, &screen_vp);
       d3d8_begin_scene(d3d->dev);
-      font_driver_render_msg(video_info, NULL, msg, NULL);
+      font_driver_render_msg(d3d, video_info, msg, NULL, NULL);
       d3d8_end_scene(d3d->dev);
    }
 
@@ -1821,7 +1780,7 @@ static void d3d8_set_video_mode(void *data,
       bool fullscreen)
 {
 #ifndef _XBOX
-   win32_show_cursor(!fullscreen);
+   win32_show_cursor(data, !fullscreen);
 #endif
 }
 
@@ -1858,7 +1817,7 @@ static const video_poke_interface_t d3d_poke_interface = {
    d3d8_set_menu_texture_enable,
    d3d8_set_osd_msg,
 
-   d3d8_show_mouse,
+   win32_show_cursor,
    NULL,                         /* grab_mouse_toggle */
    NULL,                         /* get_current_shader */
    NULL,                         /* get_current_software_framebuffer */

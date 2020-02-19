@@ -29,7 +29,6 @@
 
 #include "core_info.h"
 #include "database_info.h"
-#include "verbosity.h"
 
 int database_info_build_query_enum(char *s, size_t len,
       enum database_query_type type,
@@ -38,8 +37,7 @@ int database_info_build_query_enum(char *s, size_t len,
    bool add_quotes = true;
    bool add_glob   = false;
 
-   string_add_bracket_open(s, len);
-   string_add_single_quote(s, len);
+   strlcpy(s, "{'", len);
 
    switch (type)
    {
@@ -51,7 +49,7 @@ int database_info_build_query_enum(char *s, size_t len,
          break;
       case DATABASE_QUERY_ENTRY_DEVELOPER:
          strlcat(s, "developer", len);
-         add_glob = true;
+         add_glob   = true;
          add_quotes = false;
          break;
       case DATABASE_QUERY_ENTRY_ORIGIN:
@@ -106,27 +104,21 @@ int database_info_build_query_enum(char *s, size_t len,
          add_quotes = false;
          break;
       case DATABASE_QUERY_NONE:
-         RARCH_LOG("Unknown type: %d\n", type);
          break;
    }
 
-   string_add_single_quote(s, len);
-   string_add_colon(s, len);
+   strlcat(s, "':", len);
    if (add_glob)
-      string_add_glob_open(s, len);
+      strlcat(s, "glob('*", len);
    if (add_quotes)
-      string_add_quote(s, len);
+      strlcat(s, "\"", len);
    strlcat(s, path, len);
    if (add_glob)
-      string_add_glob_close(s, len);
+      strlcat(s, "*')", len);
    if (add_quotes)
-      string_add_quote(s, len);
+      strlcat(s, "\"", len);
 
-   string_add_bracket_close(s, len);
-
-#if 0
-   RARCH_LOG("query: %s\n", s);
-#endif
+   strlcat(s, "}", len);
 
    return 0;
 }
@@ -291,10 +283,6 @@ static int database_cursor_iterate(libretrodb_cursor_t *cur,
       else if (string_is_equal(str, "md5"))
          db_info->md5 = bin_to_hex_alloc(
                (uint8_t*)val->val.binary.buff, val->val.binary.len);
-      else
-      {
-         RARCH_LOG("Unknown key: %s\n", str);
-      }
    }
 
    rmsgpack_dom_value_free(&item);

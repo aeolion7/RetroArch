@@ -405,7 +405,8 @@ static bool alsa_midi_write(void *p, const midi_event_t *event)
    ev.time.time.tv_sec  = d->out_ev_time.tv_sec + event->delta_time / 1000000;
    ev.time.time.tv_nsec = d->out_ev_time.tv_nsec +
          (event->delta_time % 1000000) * 1000;
-   if(ev.time.time.tv_nsec >= 1000000000)
+
+   if (ev.time.time.tv_nsec >= 1000000000)
    {
        ev.time.time.tv_sec  += 1;
        ev.time.time.tv_nsec -= 1000000000;
@@ -435,7 +436,7 @@ static bool alsa_midi_write(void *p, const midi_event_t *event)
    else if (ev.type == SND_SEQ_EVENT_PITCHBEND)
    {
       ev.data.control.channel = event->data[0] & 0x0F;
-      ev.data.control.value   = event->data[1] | (event->data[2] << 7);
+      ev.data.control.value   = (event->data[1] | (event->data[2] << 7)) - 0x2000;
    }
    else if (ev.type == SND_SEQ_EVENT_SYSEX)
    {

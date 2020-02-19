@@ -33,6 +33,7 @@ enum discord_presence
    DISCORD_PRESENCE_NETPLAY_HOSTING,
    DISCORD_PRESENCE_NETPLAY_CLIENT,
    DISCORD_PRESENCE_NETPLAY_NETPLAY_STOPPED,
+   DISCORD_PRESENCE_RETROACHIEVEMENTS,
    DISCORD_PRESENCE_SHUTDOWN
 };
 
@@ -41,13 +42,11 @@ typedef struct discord_userdata
    enum discord_presence status;
 } discord_userdata_t;
 
-void discord_init(void);
+void discord_init(const char *discord_app_id, char *args);
 
 void discord_shutdown(void);
 
-void discord_update(enum discord_presence presence);
-
-void discord_run_callbacks(void);
+void discord_update(enum discord_presence presence, bool fuzzy_archive_match);
 
 bool discord_is_ready(void);
 

@@ -54,6 +54,7 @@
 #include <streams/file_stream.h>
 #include <rhash.h>
 #include <features/features_cpu.h>
+#include <string/stdstring.h>
 
 #ifdef HAVE_MENU
 #include "../../menu/menu_driver.h"
@@ -65,6 +66,7 @@
 #include "../../defaults.h"
 #include "../../retroarch.h"
 #include "../../verbosity.h"
+#include "../../msg_hash.h"
 #include "../../ui/ui_companion_driver.h"
 
 #if 1
@@ -110,6 +112,10 @@ typedef enum
    CFSystemDomainMask   = 8,       /* provided by Apple, unmodifiable (/System) */
    CFAllDomainsMask     = 0x0ffff  /* All domains: all of the above and future items */
 } CFDomainMask;
+
+#if (defined(OSX) && !(defined(__ppc__) || defined(__ppc64__)))
+static int speak_pid                            = 0;
+#endif
 
 static char darwin_cpu_model_name[64] = {0};
 
@@ -358,6 +364,13 @@ static void frontend_darwin_get_environment_settings(int *argc, char *argv[],
             resolved_home_dir_buf,
             sizeof(home_dir_buf)) < sizeof(home_dir_buf));
    }
+    char resolved_bundle_dir_buf[PATH_MAX_LENGTH] = {0};
+    if (realpath(bundle_path_buf, resolved_bundle_dir_buf))
+    {
+        retro_assert(strlcpy(bundle_path_buf,
+                             resolved_bundle_dir_buf,
+                             sizeof(bundle_path_buf)) < sizeof(bundle_path_buf));
+    }
 #endif
 
    strlcat(home_dir_buf, "/RetroArch", sizeof(home_dir_buf));
@@ -440,10 +453,12 @@ static void frontend_darwin_get_environment_settings(int *argc, char *argv[],
 #endif
 #endif
 
-#if TARGET_OS_IOS
+#if TARGET_OS_IPHONE
     char assets_zip_path[PATH_MAX_LENGTH];
+#if TARGET_OS_IOS
     if (major > 8)
        strlcpy(g_defaults.path.buildbot_server_url, "http://buildbot.libretro.com/nightly/apple/ios9/latest/", sizeof(g_defaults.path.buildbot_server_url));
+#endif
 
     fill_pathname_join(assets_zip_path, bundle_path_buf, "assets.zip", sizeof(assets_zip_path));
 
@@ -545,6 +560,51 @@ static int frontend_darwin_get_rating(void)
    /* iPad Air 2 */
    if (strstr(model, "iPad5,3") || strstr(model, "iPad5,4"))
       return 18;
+
+   /* iPad Pro (12.9 Inch) */
+   if (strstr(model, "iPad6,7") || strstr(model, "iPad6,8"))
+     return 19;
+
+   /* iPad Pro (9.7 Inch) */
+   if (strstr(model, "iPad6,3") || strstr(model, "iPad6,4"))
+     return 19;
+
+   /* iPad 5th Generation */
+   if (strstr(model, "iPad6,11") || strstr(model, "iPad6,12"))
+     return 19;
+
+   /* iPad Pro (12.9 Inch 2nd Generation) */
+   if (strstr(model, "iPad7,1") || strstr(model, "iPad7,2"))
+     return 19;
+
+   /* iPad Pro (10.5 Inch) */
+   if (strstr(model, "iPad7,3") || strstr(model, "iPad7,4"))
+     return 19;
+
+   /* iPad Pro 6th Generation) */
+   if (strstr(model, "iPad7,5") || strstr(model, "iPad7,6"))
+     return 19;
+
+   /* iPad Pro (11 Inch) */
+   if (     strstr(model, "iPad8,1")
+         || strstr(model, "iPad8,2")
+         || strstr(model, "iPad8,3")
+         || strstr(model, "iPad8,4")
+      )
+      return 19;
+
+   /* iPad Pro (12.9 3rd Generation) */
+    if (   strstr(model, "iPad8,5")
+        || strstr(model, "iPad8,6")
+        || strstr(model, "iPad8,7")
+        || strstr(model, "iPad8,8")
+       )
+       return 19;
+
+   /* iPad Air 3rd Generation) */
+    if (   strstr(model, "iPad11,3")
+        || strstr(model, "iPad11,4"))
+       return 19;
 
    /* TODO/FIXME -
       - more ratings for more systems
@@ -680,7 +740,7 @@ static int frontend_darwin_parse_drive_list(void *data, bool load_content)
    CFBundleRef bundle = CFBundleGetMainBundle();
    enum msg_hash_enums enum_idx = load_content ?
       MENU_ENUM_LABEL_FILE_DETECT_CORE_LIST_PUSH_DIR :
-      MSG_UNKNOWN;
+      MENU_ENUM_LABEL_FILE_BROWSER_DIRECTORY;
 
    bundle_url  = CFBundleCopyBundleURL(bundle);
    bundle_path = CFURLCopyPath(bundle_url);
@@ -754,6 +814,144 @@ static const char* frontend_darwin_get_cpu_model_name(void)
    return darwin_cpu_model_name;
 }
 
+#if (defined(OSX) && !(defined(__ppc__) || defined(__ppc64__)))
+static char* accessibility_mac_language_code(const char* language)
+{
+   if (string_is_equal(language,"en"))
+      return "Alex";
+   else if (string_is_equal(language,"it"))
+      return "Alice";
+   else if (string_is_equal(language,"sv"))
+      return "Alva";
+   else if (string_is_equal(language,"fr"))
+      return "Amelie";
+   else if (string_is_equal(language,"de"))
+      return "Anna";
+   else if (string_is_equal(language,"he"))
+      return "Carmit";
+   else if (string_is_equal(language,"id"))
+      return "Damayanti";
+   else if (string_is_equal(language,"es"))
+      return "Diego";
+   else if (string_is_equal(language,"nl"))
+      return "Ellen";
+   else if (string_is_equal(language,"ro"))
+      return "Ioana";
+   else if (string_is_equal(language,"pt_pt"))
+      return "Joana";
+   else if (string_is_equal(language,"pt_bt") || string_is_equal(language,"pt"))
+      return "Luciana";
+   else if (string_is_equal(language,"th"))
+      return "Kanya";
+   else if (string_is_equal(language,"ja"))
+      return "Kyoko";
+   else if (string_is_equal(language,"sk"))
+      return "Laura";
+   else if (string_is_equal(language,"hi"))
+      return "Lekha";
+   else if (string_is_equal(language,"ar"))
+      return "Maged";
+   else if (string_is_equal(language,"hu"))
+      return "Mariska";
+   else if (string_is_equal(language,"zh_tw") || string_is_equal(language,"zh"))
+      return "Mei-Jia";
+   else if (string_is_equal(language,"el"))
+      return "Melina";
+   else if (string_is_equal(language,"ru"))
+      return "Milena";
+   else if (string_is_equal(language,"nb"))
+      return "Nora";
+   else if (string_is_equal(language,"da"))
+      return "Sara";
+   else if (string_is_equal(language,"fi"))
+      return "Satu";
+   else if (string_is_equal(language,"zh_hk"))
+      return "Sin-ji";
+   else if (string_is_equal(language,"zh_cn"))
+      return "Ting-Ting";
+   else if (string_is_equal(language,"tr"))
+      return "Yelda";
+   else if (string_is_equal(language,"ko"))
+      return "Yuna";
+   else if (string_is_equal(language,"pl"))
+      return "Zosia";
+   else if (string_is_equal(language,"cs")) 
+      return "Zuzana";
+   else
+      return "";
+}
+
+static bool is_narrator_running_macos(void)
+{
+   return (kill(speak_pid, 0) == 0);
+}
+
+static bool accessibility_speak_macos(int speed,
+      const char* speak_text, int priority)
+{
+   int pid;
+   const char *voice      = get_user_language_iso639_1(false);
+   char* language_speaker = accessibility_mac_language_code(voice);
+   char* speeds[10]       = {"80", "100", "125", "150", "170", "210", "260", "310", "380", "450"};
+
+   if (speed < 1)
+      speed = 1;
+   else if (speed > 10)
+      speed = 10;
+
+   if (priority < 10 && speak_pid > 0)
+   {
+      /* check if old pid is running */
+      if (is_narrator_running_macos())
+         return true;
+   }
+
+   if (speak_pid > 0)
+   {
+      /* Kill the running say */
+      kill(speak_pid, SIGTERM);
+      speak_pid = 0;
+   }
+
+   pid = fork();
+   if (pid < 0)
+   {
+      /* error */
+      RARCH_LOG("ERROR: could not fork for say command.\n");
+   }
+   else if (pid > 0)
+   {
+      /* parent process */
+      speak_pid = pid;
+
+      /* Tell the system that we'll ignore the exit status of the child 
+       * process.  This prevents zombie processes. */
+      signal(SIGCHLD,SIG_IGN);
+   }
+   else
+   { 
+      /* child process: replace process with the say command */ 
+      if (strlen(language_speaker)> 0)
+      {
+         char* cmd[] = {"say", "-v", NULL, 
+                        NULL, "-r", NULL, NULL};
+         cmd[2] = language_speaker;
+         cmd[3] = (char *) speak_text;
+         cmd[5] = speeds[speed-1];
+         execvp("say", cmd);
+      }
+      else
+      {
+         char* cmd[] = {"say", NULL, "-r", NULL,  NULL};
+         cmd[1] = (char*) speak_text;
+         cmd[3] = speeds[speed-1];
+         execvp("say",cmd);
+      }
+   }
+   return true;
+}
+#endif
+
 frontend_ctx_driver_t frontend_ctx_darwin = {
    frontend_darwin_get_environment_settings,
    NULL,                         /* init */
@@ -787,5 +985,12 @@ frontend_ctx_driver_t frontend_ctx_darwin = {
    NULL,
 #endif
    NULL,                         /* get_user_language */
+#if (defined(OSX) && !(defined(__ppc__) || defined(__ppc64__)))
+   is_narrator_running_macos,    /* is_narrator_running */
+   accessibility_speak_macos,    /* accessibility_speak */
+#else
+   NULL,                         /* is_narrator_running */
+   NULL,                         /* accessibility_speak */
+#endif
    "darwin",
 };

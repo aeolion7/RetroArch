@@ -27,15 +27,19 @@
 
 RETRO_BEGIN_DECLS
 
+#define FILE_PATH_LOG_INFO  "[INFO]"
+#define FILE_PATH_LOG_ERROR "[ERROR]"
+#define FILE_PATH_LOG_WARN  "[WARN]"
+
 bool verbosity_is_enabled(void);
 
 void verbosity_enable(void);
 
 void verbosity_disable(void);
 
-bool *verbosity_get_ptr(void);
+void verbosity_set_log_level(unsigned level);
 
-void *retro_main_log_file(void);
+bool *verbosity_get_ptr(void);
 
 void retro_main_log_file_deinit(void);
 
@@ -141,6 +145,16 @@ void RARCH_ERR(const char *fmt, ...);
 #define RARCH_WARN_V RARCH_LOG_V
 #define RARCH_ERR_V RARCH_LOG_V
 #endif /* HAVE_LOGGER */
+
+void rarch_log_file_init(
+      bool log_to_file,
+      bool log_to_file_timestamp,
+      const char *log_dir);
+
+void rarch_log_file_deinit(void);
+
+void rarch_log_file_set_override(const char *path);
+
 
 RETRO_END_DECLS
 

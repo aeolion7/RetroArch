@@ -27,6 +27,8 @@
 #include "../config.h"
 #endif
 
+#include "../config.def.h"
+
 #ifdef ANDROID
 #include <android/keycodes.h>
 #include "drivers_keyboard/keyboard_event_android.h"
@@ -44,7 +46,7 @@
 #include "SDL.h"
 #endif
 
-#if defined(__linux__) || defined(HAVE_WAYLAND)
+#if defined(__linux__) || defined(__linux__) && defined(HAVE_WAYLAND)
 #include <linux/input.h>
 #include <linux/kd.h>
 #endif
